@@ -3,20 +3,22 @@ package sdiscovery
 import (
 	"encoding/binary"
 	"errors"
+	"log"
 	"net"
 )
 
 // Send and receive packets over a network connection
 type connection struct {
-	conn      *net.UDPConn
-	bcastAddr *net.Addr
+	PacketReceived chan []byte
+	conn           *net.UDPConn
+	addr           *net.UDPAddr
 }
 
 // Derive the broadcast address from an address in CIDR notation
-func broadcastAddress(s string) (net.IP, error) {
+func broadcastAddressFromCIDR(cidr string) (net.IP, error) {
 
 	// Parse the CIDR
-	_, ipnet, err := net.ParseCIDR(s)
+	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil, err
 	}
@@ -38,49 +40,60 @@ func broadcastAddress(s string) (net.IP, error) {
 	return addr, nil
 }
 
+// Find a broadcast address for the provided interface
+func findBroadcastAddress(ifi *net.Interface) (net.IP, error) {
+
+	// Obtain all of the addresses on the interface
+	addrs, err := ifi.Addrs()
+	if err != nil {
+		return nil, err
+	}
+
+	// For each of the addresses, check if a valid broadcast address exists
+	for _, addr := range addrs {
+		if ip, err := broadcastAddressFromCIDR(addr.String()); err == nil {
+			return ip, nil
+		}
+	}
+
+	// No broadcast address was found
+	return nil, errors.New("No broadcast address was found")
+}
+
 // Create a new connection
 func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, error) {
 
 	var (
-		conn      *net.UDPConn
-		bcastAddr *net.Addr
-		err       error
+		conn *net.UDPConn
+		addr *net.UDPAddr
+		err  error
 	)
 
 	if multicast {
 
-		// Connect to the all nodes link-local IPv6 address
-		conn, err = net.ListenMulticastUDP("udp6", ifi, &net.UDPAddr{
+		// Use the all nodes link-local IPv6 address
+		addr = &net.UDPAddr{
 			IP:   net.IPv6linklocalallnodes,
 			Port: port,
-		})
+		}
+
+		conn, err = net.ListenMulticastUDP("udp6", ifi, addr)
 
 	} else {
 
-		// Obtain all of the interface addresses
-		addrs, err := ifi.Addrs()
+		// Attempt to find an IPv4 broadcast address
+		ip, err := findBroadcastAddress(ifi)
 		if err != nil {
 			return nil, err
 		}
 
-		// Attempt to find an IPv4 broadcast address
-		var ip net.IP
-		for _, addr := range addrs {
-			if ip, err = broadcastAddress(addr.String()); err != nil {
-				continue
-			}
-		}
-
-		// Error if no addresses were found
-		if ip == nil {
-			return nil, errors.New("Unable to find a broadcast address")
-		}
-
-		bcastAddr := &net.UDPAddr{
+		// Build the broadcast address
+		addr = &net.UDPAddr{
 			IP:   ip,
 			Port: port,
 		}
-		conn, err = net.ListenUDP("udp4", bcastAddr)
+
+		conn, err = net.ListenUDP("udp4", addr)
 	}
 
 	// Check for an error
@@ -88,8 +101,43 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 		return nil, err
 	}
 
-	return &connection{
-		conn:      conn,
-		bcastAddr: bcastAddr,
-	}, nil
+	// Create the connection
+	c := &connection{
+		PacketReceived: make(chan []byte),
+		conn:           conn,
+		addr:           addr,
+	}
+
+	// Spawn a new goroutine to read from the socket
+	go c.run()
+
+	return c, nil
+}
+
+// Continuously read packets from the connection
+func (c *connection) run() {
+
+	for {
+
+		// Put a hard cap of 1000 bytes on the packet size
+		b := make([]byte, 1000)
+
+		// Read the packet
+		_, _, err := c.conn.ReadFromUDP(b)
+		if err != nil {
+
+			// TODO: make sure this is the best way to handle an error
+			log.Println("[ERR]", err)
+			return
+		}
+
+		// Write the packet to the channel
+		c.PacketReceived <- b
+	}
+}
+
+// Send a packet over the connection
+func (c *connection) Send(packet []byte) error {
+	_, err := c.conn.WriteToUDP(packet, c.addr)
+	return err
 }
