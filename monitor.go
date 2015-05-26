@@ -52,6 +52,9 @@ func (m *monitor) run() {
 			}
 		}
 
+		// Assign the new list to the monitor
+		m.oldNames = newNames
+
 		// Wait for the next interval
 		<-m.ticker.C
 	}
