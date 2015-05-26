@@ -11,7 +11,6 @@ import (
 type connection struct {
 	PacketReceived chan []byte
 	conn           *net.UDPConn
-	addr           *net.UDPAddr
 }
 
 // Derive the broadcast address from an address in CIDR notation
@@ -65,19 +64,16 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 
 	var (
 		conn *net.UDPConn
-		addr *net.UDPAddr
 		err  error
 	)
 
 	if multicast {
 
 		// Use the all nodes link-local IPv6 address
-		addr = &net.UDPAddr{
+		conn, err = net.ListenMulticastUDP("udp6", ifi, &net.UDPAddr{
 			IP:   net.IPv6linklocalallnodes,
 			Port: port,
-		}
-
-		conn, err = net.ListenMulticastUDP("udp6", ifi, addr)
+		})
 
 	} else {
 
@@ -88,12 +84,10 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 		}
 
 		// Build the broadcast address
-		addr = &net.UDPAddr{
+		conn, err = net.ListenUDP("udp4", &net.UDPAddr{
 			IP:   ip,
 			Port: port,
-		}
-
-		conn, err = net.ListenUDP("udp4", addr)
+		})
 	}
 
 	// Check for an error
@@ -105,7 +99,6 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 	c := &connection{
 		PacketReceived: make(chan []byte),
 		conn:           conn,
-		addr:           addr,
 	}
 
 	// Spawn a new goroutine to read from the socket
@@ -123,7 +116,7 @@ func (c *connection) run() {
 		b := make([]byte, 1000)
 
 		// Read the packet
-		_, _, err := c.conn.ReadFromUDP(b)
+		n, _, err := c.conn.ReadFromUDP(b)
 		if err != nil {
 
 			// TODO: make sure this is the best way to handle an error
@@ -132,12 +125,12 @@ func (c *connection) run() {
 		}
 
 		// Write the packet to the channel
-		c.PacketReceived <- b
+		c.PacketReceived <- b[:n]
 	}
 }
 
 // Send a packet over the connection
 func (c *connection) Send(packet []byte) error {
-	_, err := c.conn.WriteToUDP(packet, c.addr)
+	_, err := c.conn.WriteToUDP(packet, c.conn.LocalAddr().(*net.UDPAddr))
 	return err
 }
