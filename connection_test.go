@@ -2,6 +2,7 @@ package sdiscovery
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -52,6 +53,34 @@ func findInterfaceWithFlag(flag net.Flags) (*net.Interface, error) {
 	return nil, nil
 }
 
+// Send and receive a packet
+func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
+
+	// Create the connection with a randomly chosen port
+	conn, err := newConnection(ifi, 0, multicast)
+	if err != nil {
+		return err
+	}
+
+	// Send a packet
+	packet := []byte(`test`)
+	if err := conn.Send(packet); err != nil {
+		return err
+	}
+
+	// Receive the packet
+	select {
+	case b := <-conn.PacketReceived:
+		if !bytes.Equal(b, packet) {
+			return errors.New("Packet contents do not match")
+		}
+	case <-time.NewTicker(50 * time.Millisecond).C:
+		return errors.New("Timeout waiting for broadcast packet")
+	}
+
+	return nil
+}
+
 // Test that packets are correctly sent and received via broadcast
 func Test_connection_broadcast(t *testing.T) {
 
@@ -66,30 +95,28 @@ func Test_connection_broadcast(t *testing.T) {
 		t.Skip("No broadcast interface found")
 	}
 
-	// Create the connection with a randomly chosen port
-	conn, err := newConnection(ifi, 0, false)
-	if err != nil {
+	// Run the test
+	if err := sendAndReceivePacket(ifi, false); err != nil {
 		t.Fatal(err)
-	}
-
-	// Send a packet
-	packet := []byte(`test`)
-	if err := conn.Send(packet); err != nil {
-		t.Fatal(err)
-	}
-
-	// Receive the packet
-	select {
-	case b := <-conn.PacketReceived:
-		if !bytes.Equal(b, packet) {
-			t.Fatal("Packet contents do not match")
-		}
-	case <-time.NewTicker(50 * time.Millisecond).C:
-		t.Fatal("Timeout waiting for broadcast packet")
 	}
 }
 
 // Test that packets are correctly sent and received via multicast
 func Test_connection_multicast(t *testing.T) {
-	//...
+
+	// Attempt to find a multicast interface
+	ifi, err := findInterfaceWithFlag(net.FlagMulticast)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Skip the test if none was found
+	if ifi == nil {
+		t.Skip("No multicast interface found")
+	}
+
+	// Run the test
+	if err := sendAndReceivePacket(ifi, true); err != nil {
+		t.Fatal(err)
+	}
 }
