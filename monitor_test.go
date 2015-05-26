@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// Test for the correct interface names being sent over the InterfaceAdded socket
-func TestMonitor_InterfaceAdded(t *testing.T) {
+// Test that interface names are correctly enumerated through
+// InterfaceAdded and that nothing is written to InterfaceRemoved
+func Test_monitor(t *testing.T) {
 
 	var foundNames []string
 	var monitorNames []string
@@ -36,6 +37,8 @@ loop:
 		select {
 		case name := <-monitor.InterfaceAdded:
 			monitorNames = append(monitorNames, name)
+		case <-monitor.InterfaceRemoved:
+			t.Fatal("Interface removed unexpectedly")
 		case <-timeout:
 			break loop
 		}
