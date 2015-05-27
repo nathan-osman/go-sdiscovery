@@ -20,4 +20,48 @@ To use go-sdiscovery in your project, add the following import:
 
 ### Usage
 
-[TODO]
+All interaction with the library takes place through a `Service`, which is created in the following manner:
+
+    // Custom data sent to other peers during discovery
+    type MyData struct {
+        Data string
+    }
+
+    // Create the service
+    svc := sdiscovery.NewService(
+        "machine1",             // unique identifier
+        &MyData{"custom data"}, // custom data for this peer
+        30 * time.Second,       // timeout before a peer is considered unreachable
+    )
+
+At this point, the service will begin sending broadcast packets on all local network interfaces and listening for packets from other peers. The service provides a property that maps each peer's unique identifier to its addresses and user data:
+
+    for id, peer := range svc.Peers {
+        fmt.Printf("Peer (%s): %v\n", id, peer)
+    }
+
+The service also provides two channels that provide notification when a peer is added or removed:
+
+    for {
+        select {
+        case <-svc.PeerAdded:
+            fmt.Println("New peer added!")
+        case <-svc.PeerRemoved:
+            fmt.Println("Peer removed!")
+        }
+    }
+
+Each peer provides a list of its IP addresses, which is guaranteed to contain at least one item. These are suitable for connecting to a service running on the peer:
+
+    peer := svc.Peers["peer_name"]
+    conn, err:= net.DialTCP(
+        "tcp", nil,
+        &net.TCPAddr{
+            IP:   peer.Addresses[0],
+            Port: 80,
+        },
+    )
+
+When you are done with the service, it can be shutdown with:
+
+    svc.Shutdown()
