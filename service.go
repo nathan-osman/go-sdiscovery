@@ -29,7 +29,6 @@ func NewService(peerTimeout time.Duration, userData struct{}) *Service {
 
 	// Spawn a new goroutine to check for peer timeouts
 	go func() {
-		s.checkPeerTimeouts()
 		for {
 			s.checkPeerTimeouts()
 			<-ticker.C
