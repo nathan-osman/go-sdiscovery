@@ -12,7 +12,7 @@ This library provides an extremely simple API that abstracts the process of regi
 
 Use the following command to download the source code for go-sdiscovery:
 
-    go fetch github.com/nathan-osman/go-sdiscovery
+    go get github.com/nathan-osman/go-sdiscovery
 
 To use go-sdiscovery in your project, add the following import:
 
@@ -57,7 +57,7 @@ Each peer provides a list of its IP addresses, which is guaranteed to contain at
     conn, err:= net.DialTCP(
         "tcp", nil,
         &net.TCPAddr{
-            IP:   peer.Addresses[0],
+            IP:   peer.Addresses[0].IP,
             Port: 80,
         },
     )
