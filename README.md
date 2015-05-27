@@ -1,5 +1,6 @@
 ## go-sdiscovery
 
+[![MIT License](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](http://opensource.org/licenses/MIT)
 [![GoDoc](https://godoc.org/github.com/nathan-osman/go-sdiscovery?status.svg)](https://godoc.org/github.com/nathan-osman/go-sdiscovery)
 [![Build Status](https://travis-ci.org/nathan-osman/go-sdiscovery.svg)](https://travis-ci.org/nathan-osman/go-sdiscovery)
 
