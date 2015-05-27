@@ -3,13 +3,18 @@ package sdiscovery
 import (
 	"encoding/binary"
 	"errors"
-	"log"
 	"net"
 )
 
-// Send and receive packets over a network connection
+// Data about an individual packet received from a connection
+type packet struct {
+	IP   net.IP
+	Data []byte
+}
+
+// Sender and receiver for packets over a network connection
 type connection struct {
-	PacketReceived chan []byte
+	packetReceived chan<- packet
 	conn           *net.UDPConn
 }
 
@@ -60,7 +65,7 @@ func findBroadcastAddress(ifi *net.Interface) (net.IP, error) {
 }
 
 // Create a new connection
-func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, error) {
+func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, multicast bool) (*connection, error) {
 
 	var (
 		conn *net.UDPConn
@@ -97,11 +102,11 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 
 	// Create the connection
 	c := &connection{
-		PacketReceived: make(chan []byte),
+		packetReceived: packetReceived,
 		conn:           conn,
 	}
 
-	// Spawn a new goroutine to read from the socket
+	// Spawn a goroutine to read from the socket
 	go c.run()
 
 	return c, nil
@@ -109,23 +114,22 @@ func newConnection(ifi *net.Interface, port int, multicast bool) (*connection, e
 
 // Continuously read packets from the connection
 func (c *connection) run() {
-
 	for {
 
 		// Put a hard cap of 1000 bytes on the packet size
 		b := make([]byte, 1000)
 
-		// Read the packet
-		n, _, err := c.conn.ReadFromUDP(b)
+		// Read the packet, quitting the goroutine on error
+		n, addr, err := c.conn.ReadFromUDP(b)
 		if err != nil {
-
-			// TODO: make sure this is the best way to handle an error
-			log.Println("[ERR]", err)
 			return
 		}
 
 		// Write the packet to the channel
-		c.PacketReceived <- b[:n]
+		c.packetReceived <- packet{
+			IP:   addr.IP,
+			Data: b[:n],
+		}
 	}
 }
 
@@ -133,4 +137,9 @@ func (c *connection) run() {
 func (c *connection) Send(packet []byte) error {
 	_, err := c.conn.WriteToUDP(packet, c.conn.LocalAddr().(*net.UDPAddr))
 	return err
+}
+
+// Stop listening for incoming packets
+func (c *connection) Stop() {
+	c.conn.Close()
 }

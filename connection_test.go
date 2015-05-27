@@ -56,8 +56,10 @@ func findInterfaceWithFlag(flag net.Flags) (*net.Interface, error) {
 // Send and receive a packet
 func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
 
+	packetReceived := make(chan packet)
+
 	// Create the connection with a randomly chosen port
-	conn, err := newConnection(ifi, 0, multicast)
+	conn, err := newConnection(packetReceived, ifi, 0, multicast)
 	if err != nil {
 		return err
 	}
@@ -70,8 +72,8 @@ func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
 
 	// Receive the packet
 	select {
-	case b := <-conn.PacketReceived:
-		if !bytes.Equal(b, packet) {
+	case b := <-packetReceived:
+		if !bytes.Equal(b.Data, packet) {
 			return errors.New("Packet contents do not match")
 		}
 	case <-time.NewTicker(50 * time.Millisecond).C:
