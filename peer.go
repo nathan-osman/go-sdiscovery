@@ -19,9 +19,9 @@ type Peer struct {
 	Addresses []PeerAddress
 }
 
-// Check the peer's addresses for expiry and determine if the peer itself
-// has expired based on the last ping received.
-func (p *Peer) HasExpired(timeout time.Duration) bool {
+// Check each of the peer's addresses to determine if any have expired. The
+// specified timeout value is used to determine when this occurs.
+func (p *Peer) Update(timeout time.Duration) {
 
 	// Obtain the current time
 	curTime := time.Now()
@@ -35,7 +35,9 @@ func (p *Peer) HasExpired(timeout time.Duration) bool {
 		}
 	}
 	p.Addresses = addresses
+}
 
-	// If all of the addresses have expired, then so has the device
+// Determine if the peer has any valid addresses remaining.
+func (p *Peer) HasExpired() bool {
 	return len(p.Addresses) == 0
 }
