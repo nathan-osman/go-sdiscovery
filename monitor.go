@@ -45,6 +45,8 @@ func (m *monitor) run(pollInterval time.Duration) {
 		case <-ticker.C:
 			m.enumerate()
 		case <-m.stop:
+			close(m.InterfaceAdded)
+			close(m.InterfaceRemoved)
 			return
 		}
 	}
@@ -71,14 +73,20 @@ func (m *monitor) enumerate() {
 	// Write each of the new names to InterfaceAdded
 	for name, _ := range newNames {
 		if _, exists := m.oldNames[name]; !exists {
-			m.InterfaceAdded <- name
+			select {
+			case m.InterfaceAdded <- name:
+			case <-m.stop:
+			}
 		}
 	}
 
 	// Write each of the missing names to InterfaceRemoved
 	for name, _ := range m.oldNames {
 		if _, exists := newNames[name]; !exists {
-			m.InterfaceRemoved <- name
+			select {
+			case m.InterfaceRemoved <- name:
+			case <-m.stop:
+			}
 		}
 	}
 
@@ -88,5 +96,5 @@ func (m *monitor) enumerate() {
 
 // Stop monitoring for new network interfaces
 func (m *monitor) Stop() {
-	m.stop <- struct{}{}
+	close(m.stop)
 }

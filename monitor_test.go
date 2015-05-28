@@ -17,15 +17,18 @@ func Test_enumerate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Put the names into the list
+	// Create a list for the names found here and the names returned by enumerate()
 	foundNames := make([]string, len(ifis))
+	monitorNames := make([]string, len(ifis))
+
+	// Populate the list
 	for _, ifi := range ifis {
 		foundNames = append(foundNames, ifi.Name)
 	}
 
-	// Create a monitor and a list of names found by the monitor
+	// Create a monitor
 	monitor := newMonitor(50 * time.Millisecond)
-	monitorNames := make([]string, len(ifis))
+	defer monitor.Stop()
 
 	// Wait for the interfaces to be enumerated
 	timeout := time.After(150 * time.Millisecond)
