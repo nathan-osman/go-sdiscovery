@@ -14,12 +14,12 @@ type packet struct {
 
 // Sender and receiver for packets over a network connection
 type connection struct {
-	packetReceived chan<- packet
 	conn           *net.UDPConn
+	packetReceived chan<- packet
 }
 
-// Derive the broadcast address from an address in CIDR notation
-func broadcastAddressFromCIDR(cidr string) (net.IP, error) {
+// Derive the broadcast IP address from an IP address in CIDR notation
+func broadcastIPFromCIDR(cidr string) (net.IP, error) {
 
 	// Parse the CIDR
 	_, ipnet, err := net.ParseCIDR(cidr)
@@ -38,10 +38,10 @@ func broadcastAddressFromCIDR(cidr string) (net.IP, error) {
 	mask := binary.LittleEndian.Uint32(ipnet.Mask)
 
 	// Calculate the broadcast address
-	addr := make([]byte, 4)
-	binary.LittleEndian.PutUint32(addr, ip&mask|^mask)
+	bcastIP := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bcastIP, ip&mask|^mask)
 
-	return addr, nil
+	return bcastIP, nil
 }
 
 // Find a broadcast address for the provided interface
@@ -55,7 +55,7 @@ func findBroadcastAddress(ifi *net.Interface) (net.IP, error) {
 
 	// For each of the addresses, check if a valid broadcast address exists
 	for _, addr := range addrs {
-		if ip, err := broadcastAddressFromCIDR(addr.String()); err == nil {
+		if ip, err := broadcastIPFromCIDR(addr.String()); err == nil {
 			return ip, nil
 		}
 	}
@@ -64,7 +64,7 @@ func findBroadcastAddress(ifi *net.Interface) (net.IP, error) {
 	return nil, errors.New("No broadcast address was found")
 }
 
-// Create a new connection
+// Create a new connection for sending and receiving packets
 func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, multicast bool) (*connection, error) {
 
 	var (
@@ -102,8 +102,8 @@ func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, m
 
 	// Create the connection
 	c := &connection{
-		packetReceived: packetReceived,
 		conn:           conn,
+		packetReceived: packetReceived,
 	}
 
 	// Spawn a goroutine to read from the socket

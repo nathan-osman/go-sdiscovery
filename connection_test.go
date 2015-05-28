@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-// Test the broadcastAddress function
-func Test_broadcastAddressFromCIDR(t *testing.T) {
+// Test the ability to convert a CIDR to a broadcast address
+func Test_broadcastIPFromCIDR(t *testing.T) {
 
 	var ip net.IP
 	var err error
 
 	// Obtain the broadcast address for the provided CIDR
-	if ip, err = broadcastAddressFromCIDR("192.168.1.1/24"); err != nil {
+	if ip, err = broadcastIPFromCIDR("192.168.1.1/24"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -25,16 +25,16 @@ func Test_broadcastAddressFromCIDR(t *testing.T) {
 	}
 
 	// Ensure that an error is generated for an IPv6 address
-	if ip, err = broadcastAddressFromCIDR("::1/128"); err == nil {
+	if ip, err = broadcastIPFromCIDR("::1/128"); err == nil {
 		t.Fatal("Expected error for IPv6 address")
 	}
 }
 
 // Testing the findBroadcastAddress function is virtually impossible since
-// there is no way (AFAIK) to simulate an interface for testing
+// there is no way (AFAIK) to simulate an interface for testing purposes
 
-// Attempt to find an interface with the specified flag
-func findInterfaceWithFlag(flag net.Flags) (*net.Interface, error) {
+// Attempt to find an interface with the specified flags
+func findInterfaceWithFlags(flags net.Flags) (*net.Interface, error) {
 
 	// Obtain the list of interfaces
 	ifis, err := net.Interfaces()
@@ -44,7 +44,7 @@ func findInterfaceWithFlag(flag net.Flags) (*net.Interface, error) {
 
 	// Return the first one that matches
 	for _, ifi := range ifis {
-		if ifi.Flags&flag != 0 {
+		if ifi.Flags&flags != 0 {
 			return &ifi, nil
 		}
 	}
@@ -63,6 +63,8 @@ func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
 	if err != nil {
 		return err
 	}
+
+	defer conn.Stop()
 
 	// Send a packet
 	packet := []byte(`test`)
@@ -87,7 +89,7 @@ func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
 func Test_connection_broadcast(t *testing.T) {
 
 	// Attempt to find a broadcast interface
-	ifi, err := findInterfaceWithFlag(net.FlagBroadcast)
+	ifi, err := findInterfaceWithFlags(net.FlagBroadcast)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,7 @@ func Test_connection_broadcast(t *testing.T) {
 func Test_connection_multicast(t *testing.T) {
 
 	// Attempt to find a multicast interface
-	ifi, err := findInterfaceWithFlag(net.FlagMulticast)
+	ifi, err := findInterfaceWithFlags(net.FlagMulticast)
 	if err != nil {
 		t.Fatal(err)
 	}
