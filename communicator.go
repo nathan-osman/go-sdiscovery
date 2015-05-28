@@ -16,14 +16,15 @@ type communicator struct {
 }
 
 // Create a new communicator
-func newCommunicator(ifiInterval time.Duration, port int) *communicator {
+func newCommunicator(pollInterval time.Duration, port int) *communicator {
 
 	// Create the communicator, including the channel that will be used
 	// for receiving the individual packets and stopping the communicator
 	c := &communicator{
 		PacketReceived: make(chan packet),
 		stop:           make(chan struct{}),
-		monitor:        newMonitor(ifiInterval),
+		monitor:        newMonitor(pollInterval),
+		connections:    make(map[string][]*connection),
 		port:           port,
 	}
 
@@ -40,7 +41,7 @@ func (c *communicator) run() {
 		case name := <-c.monitor.InterfaceAdded:
 			c.addInterface(name)
 		case name := <-c.monitor.InterfaceRemoved:
-			delete(c.connections, name)
+			c.removeInterface(name)
 		case <-c.stop:
 			return
 		}
@@ -76,19 +77,42 @@ func (c *communicator) addInterface(name string) {
 	}
 }
 
+// Remove all connections for the specified interface
+func (c *communicator) removeInterface(name string) {
+
+	// Check if the interface exists
+	if connections, exists := c.connections[name]; exists {
+
+		// Stop the connections
+		for _, connection := range connections {
+			connection.Stop()
+		}
+
+		// Remove the item from the map
+		delete(c.connections, name)
+	}
+}
+
+// Send data on each of the connections
+func (c *communicator) Send(data []byte) {
+	for _, connections := range c.connections {
+		for _, connection := range connections {
+			connection.Send(data)
+		}
+	}
+}
+
 // Stop and close all of the connections
 func (c *communicator) Stop() {
 
 	// Stop the goroutine monitoring the interfaces
-	c.stop <- struct{}{}
+	close(c.stop)
 
 	// Stop the monitor
 	c.monitor.Stop()
 
 	// Stop each of the individual connections
-	for _, connections := range c.connections {
-		for _, connection := range connections {
-			connection.Stop()
-		}
+	for name, _ := range c.connections {
+		c.removeInterface(name)
 	}
 }
