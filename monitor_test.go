@@ -8,12 +8,8 @@ import (
 	"time"
 )
 
-// Test that interface names are correctly enumerated through
-// InterfaceAdded and that nothing is written to InterfaceRemoved
-func Test_monitor(t *testing.T) {
-
-	var foundNames []string
-	var monitorNames []string
+// Test that interface names are correctly enumerated
+func Test_enumerate(t *testing.T) {
 
 	// Obtain a list of all network interfaces
 	ifis, err := net.Interfaces()
@@ -22,14 +18,16 @@ func Test_monitor(t *testing.T) {
 	}
 
 	// Put the names into the list
+	foundNames := make([]string, len(ifis))
 	for _, ifi := range ifis {
 		foundNames = append(foundNames, ifi.Name)
 	}
 
-	// Create a monitor
+	// Create a monitor and a list of names found by the monitor
 	monitor := newMonitor(50 * time.Millisecond)
+	monitorNames := make([]string, len(ifis))
 
-	// Wait for interfaces to be enumerated
+	// Wait for the interfaces to be enumerated
 	timeout := time.After(150 * time.Millisecond)
 
 loop:

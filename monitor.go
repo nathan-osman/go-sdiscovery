@@ -10,37 +10,50 @@ import (
 type monitor struct {
 	InterfaceAdded   chan string
 	InterfaceRemoved chan string
+	stop             chan struct{}
 	oldNames         map[string]struct{}
 }
 
 // Create a new monitor
-func newMonitor(duration time.Duration) *monitor {
+func newMonitor(pollInterval time.Duration) *monitor {
 
 	// Create the monitor
 	m := &monitor{
 		InterfaceAdded:   make(chan string),
 		InterfaceRemoved: make(chan string),
+		stop:             make(chan struct{}),
 	}
 
-	// Create a ticker to schedule interface enumeration
-	ticker := time.NewTicker(duration)
-
-	// Spawn a new goroutine to enumerate the interfaces
-	go func() {
-		m.enumerate()
-		for {
-			m.enumerate()
-			<-ticker.C
-		}
-	}()
+	// Spawn a goroutine to perform the enumeration at the scheduled interval
+	go m.run(pollInterval)
 
 	return m
 }
 
-// Repeatedly poll for new network interfaces
+// Regularly poll for new network interfaces
+func (m *monitor) run(pollInterval time.Duration) {
+
+	// Immediately enumerate the interfaces
+	m.enumerate()
+
+	// Create a ticker to schedule interface enumeration
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.enumerate()
+		case <-m.stop:
+			return
+		}
+	}
+}
+
+// Check for changes to the list of network interfaces
 func (m *monitor) enumerate() {
 
-	// Fetch the current list of interfaces
+	// Retrieve the current list of interfaces
 	ifis, err := net.Interfaces()
 	if err != nil {
 
@@ -71,4 +84,9 @@ func (m *monitor) enumerate() {
 
 	// Assign the new list to the monitor
 	m.oldNames = newNames
+}
+
+// Stop monitoring for new network interfaces
+func (m *monitor) Stop() {
+	m.stop <- struct{}{}
 }
