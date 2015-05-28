@@ -16,6 +16,7 @@ type packet struct {
 type connection struct {
 	conn           *net.UDPConn
 	packetReceived chan<- packet
+	stop           chan struct{}
 }
 
 // Derive the broadcast IP address from an IP address in CIDR notation
@@ -104,6 +105,7 @@ func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, m
 	c := &connection{
 		conn:           conn,
 		packetReceived: packetReceived,
+		stop:           make(chan struct{}),
 	}
 
 	// Spawn a goroutine to read from the socket
@@ -125,10 +127,16 @@ func (c *connection) run() {
 			return
 		}
 
-		// Write the packet to the channel
-		c.packetReceived <- packet{
+		// Create the packet
+		p := packet{
 			IP:   addr.IP,
 			Data: b[:n],
+		}
+
+		// Write the packet to the channel
+		select {
+		case c.packetReceived <- p:
+		case <-c.stop:
 		}
 	}
 }
@@ -142,4 +150,5 @@ func (c *connection) Send(packet []byte) error {
 // Stop listening for incoming packets
 func (c *connection) Stop() {
 	c.conn.Close()
+	close(c.stop)
 }
