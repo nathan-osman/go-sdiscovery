@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"sync"
 )
 
 // Data about an individual packet received from a connection
@@ -14,9 +15,10 @@ type packet struct {
 
 // Sender and receiver for packets over a network connection
 type connection struct {
-	conn           *net.UDPConn
 	packetReceived chan<- packet
 	stop           chan struct{}
+	conn           *net.UDPConn
+	waitGroup      *sync.WaitGroup
 }
 
 // Derive the broadcast IP address from an IP address in CIDR notation
@@ -66,7 +68,7 @@ func findBroadcastAddress(ifi *net.Interface) (net.IP, error) {
 }
 
 // Create a new connection for sending and receiving packets
-func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, multicast bool) (*connection, error) {
+func newConnection(packetReceived chan<- packet, waitGroup *sync.WaitGroup, multicast bool, ifi *net.Interface, port int) (*connection, error) {
 
 	var (
 		conn *net.UDPConn
@@ -103,9 +105,10 @@ func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, m
 
 	// Create the connection
 	c := &connection{
-		conn:           conn,
 		packetReceived: packetReceived,
 		stop:           make(chan struct{}),
+		conn:           conn,
+		waitGroup:      waitGroup,
 	}
 
 	// Spawn a goroutine to read from the socket
@@ -116,6 +119,11 @@ func newConnection(packetReceived chan<- packet, ifi *net.Interface, port int, m
 
 // Continuously read packets from the connection
 func (c *connection) run() {
+
+	// Ensure that the WaitGroup is properly updated
+	c.waitGroup.Add(1)
+	defer c.waitGroup.Done()
+
 	for {
 
 		// Put a hard cap of 1000 bytes on the packet size

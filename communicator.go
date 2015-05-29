@@ -3,6 +3,7 @@ package sdiscovery
 import (
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -42,11 +43,15 @@ func (c *communicator) run(pollInterval time.Duration) {
 	monitor := newMonitor(pollInterval)
 	defer monitor.Stop()
 
+	// Create a WaitGroup for each of the sockets so that we can
+	// ensure all of them end before closing the packet channel
+	var waitGroup sync.WaitGroup
+
 loop:
 	for {
 		select {
 		case name := <-monitor.InterfaceAdded:
-			c.addInterface(name)
+			c.addInterface(name, &waitGroup)
 		case name := <-monitor.InterfaceRemoved:
 			c.removeInterface(name)
 		case data := <-c.send:
@@ -68,13 +73,13 @@ loop:
 		c.removeInterface(name)
 	}
 
-	// TODO: this could be a problem if a connection attempts
-	// to write to the channel after we close it here
+	// Wait for the connections to finish then close the channel
+	waitGroup.Wait()
 	close(c.PacketReceived)
 }
 
 // Add connections for the specified interface
-func (c *communicator) addInterface(name string) {
+func (c *communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 
 	// Assume that most interfaces will have at most two addresses
 	connections := make([]*connection, 0, 2)
@@ -89,7 +94,7 @@ func (c *communicator) addInterface(name string) {
 	// Add a connection for broadcast and multicast addresses if present
 	for _, multicast := range []bool{true, false} {
 		if ifi.Flags&net.FlagBroadcast != 0 {
-			if conn, err := newConnection(c.PacketReceived, ifi, c.port, multicast); err != nil {
+			if conn, err := newConnection(c.PacketReceived, waitGroup, multicast, ifi, c.port); err != nil {
 				log.Println("[ERR]", err)
 			} else {
 				connections = append(connections, conn)

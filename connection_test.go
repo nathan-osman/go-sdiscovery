@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -57,9 +58,10 @@ func findInterfaceWithFlags(flags net.Flags) (*net.Interface, error) {
 func sendAndReceivePacket(ifi *net.Interface, multicast bool) error {
 
 	packetReceived := make(chan packet)
+	var waitGroup sync.WaitGroup
 
 	// Create the connection with a randomly chosen port
-	conn, err := newConnection(packetReceived, ifi, 0, multicast)
+	conn, err := newConnection(packetReceived, &waitGroup, multicast, ifi, 0)
 	if err != nil {
 		return err
 	}
