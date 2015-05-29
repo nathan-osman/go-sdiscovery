@@ -9,8 +9,8 @@ import (
 // Network interface manager and packet monitor
 type communicator struct {
 	PacketReceived chan packet
+	send           chan []byte
 	stop           chan struct{}
-	monitor        *monitor
 	connections    map[string][]*connection
 	port           int
 }
@@ -19,39 +19,65 @@ type communicator struct {
 func newCommunicator(pollInterval time.Duration, port int) *communicator {
 
 	// Create the communicator, including the channel that will be used
-	// for receiving the individual packets and stopping the communicator
+	// for receiving the individual packets and the mapping between
+	// interface names and the individual connections for them
 	c := &communicator{
 		PacketReceived: make(chan packet),
+		send:           make(chan []byte),
 		stop:           make(chan struct{}),
-		monitor:        newMonitor(pollInterval),
 		connections:    make(map[string][]*connection),
 		port:           port,
 	}
 
-	// Spawn a goroutine that deals with connections
-	go c.run()
+	// Spawn a goroutine that manages connections
+	go c.run(pollInterval)
 
 	return c
 }
 
 // Add and remove connections as interfaces are added and removed
-func (c *communicator) run() {
+func (c *communicator) run(pollInterval time.Duration) {
+
+	// Monitor for interface additions and removals
+	monitor := newMonitor(pollInterval)
+	defer monitor.Stop()
+
+loop:
 	for {
 		select {
-		case name := <-c.monitor.InterfaceAdded:
+		case name := <-monitor.InterfaceAdded:
 			c.addInterface(name)
-		case name := <-c.monitor.InterfaceRemoved:
+		case name := <-monitor.InterfaceRemoved:
 			c.removeInterface(name)
+		case data := <-c.send:
+
+			// Send on each of the connections
+			for _, connections := range c.connections {
+				for _, connection := range connections {
+					connection.Send(data)
+				}
+			}
+
 		case <-c.stop:
-			return
+			break loop
 		}
 	}
+
+	// Stop all of the connections
+	for name, _ := range c.connections {
+		c.removeInterface(name)
+	}
+
+	// TODO: this could be a problem if a connection attempts
+	// to write to the channel after we close it here
+	close(c.PacketReceived)
 }
 
 // Add connections for the specified interface
 func (c *communicator) addInterface(name string) {
 
-	connections := make([]*connection, 2)
+	// Assume that most interfaces will have at most two addresses
+	connections := make([]*connection, 0, 2)
 
 	// Attempt to find the interface by name
 	ifi, err := net.InterfaceByName(name)
@@ -60,7 +86,7 @@ func (c *communicator) addInterface(name string) {
 		return
 	}
 
-	// Add a connection for broadcast and multicast if supported
+	// Add a connection for broadcast and multicast addresses if present
 	for _, multicast := range []bool{true, false} {
 		if ifi.Flags&net.FlagBroadcast != 0 {
 			if conn, err := newConnection(c.PacketReceived, ifi, c.port, multicast); err != nil {
@@ -71,7 +97,7 @@ func (c *communicator) addInterface(name string) {
 		}
 	}
 
-	// Create a new entry in the map for the connections
+	// Create a new entry in the map for the connections (if any)
 	if len(connections) != 0 {
 		c.connections[name] = connections
 	}
@@ -81,7 +107,7 @@ func (c *communicator) addInterface(name string) {
 func (c *communicator) removeInterface(name string) {
 
 	// Check if the interface exists
-	if connections, exists := c.connections[name]; exists {
+	if connections, ok := c.connections[name]; ok {
 
 		// Stop the connections
 		for _, connection := range connections {
@@ -93,26 +119,13 @@ func (c *communicator) removeInterface(name string) {
 	}
 }
 
-// Send data on each of the connections
+// Send the specified data on each of the connections
 func (c *communicator) Send(data []byte) {
-	for _, connections := range c.connections {
-		for _, connection := range connections {
-			connection.Send(data)
-		}
-	}
+	c.send <- data
 }
 
-// Stop and close all of the connections
+// Stop the goroutine by closing the channels
 func (c *communicator) Stop() {
-
-	// Stop the goroutine monitoring the interfaces
+	close(c.send)
 	close(c.stop)
-
-	// Stop the monitor
-	c.monitor.Stop()
-
-	// Stop each of the individual connections
-	for name, _ := range c.connections {
-		c.removeInterface(name)
-	}
 }
