@@ -8,7 +8,9 @@ import (
 func Test_checkPeerTimeouts(t *testing.T) {
 
 	// Create a new service with a peer timeout of 50 ms
-	svc := NewService(50*time.Millisecond, struct{}{})
+	svc := NewService(&ServiceConfig{
+		PeerTimeout: 50 * time.Millisecond,
+	})
 
 	// Manually inject the peer into the service
 	svc.Peers = append(svc.Peers, Peer{})
