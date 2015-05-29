@@ -142,8 +142,8 @@ func (c *connection) run() {
 }
 
 // Send a packet over the connection
-func (c *connection) Send(packet []byte) error {
-	_, err := c.conn.WriteToUDP(packet, c.conn.LocalAddr().(*net.UDPAddr))
+func (c *connection) Send(data []byte) error {
+	_, err := c.conn.WriteToUDP(data, c.conn.LocalAddr().(*net.UDPAddr))
 	return err
 }
 
