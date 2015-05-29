@@ -11,10 +11,9 @@ type monitor struct {
 	InterfaceAdded   chan string
 	InterfaceRemoved chan string
 	stop             chan struct{}
-	oldNames         map[string]struct{}
 }
 
-// Create a new monitor
+// Create a new interface monitor
 func newMonitor(pollInterval time.Duration) *monitor {
 
 	// Create the monitor
@@ -33,17 +32,13 @@ func newMonitor(pollInterval time.Duration) *monitor {
 // Regularly poll for new network interfaces
 func (m *monitor) run(pollInterval time.Duration) {
 
-	// Immediately enumerate the interfaces
-	m.enumerate()
-
-	// Create a ticker to schedule interface enumeration
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
+	// Create a map to store the interface names between enumerations
+	var oldNames map[string]struct{} = m.enumerate(map[string]struct{}{})
 
 	for {
 		select {
-		case <-ticker.C:
-			m.enumerate()
+		case <-time.After(pollInterval):
+			oldNames = m.enumerate(oldNames)
 		case <-m.stop:
 			close(m.InterfaceAdded)
 			close(m.InterfaceRemoved)
@@ -53,7 +48,7 @@ func (m *monitor) run(pollInterval time.Duration) {
 }
 
 // Check for changes to the list of network interfaces
-func (m *monitor) enumerate() {
+func (m *monitor) enumerate(oldNames map[string]struct{}) map[string]struct{} {
 
 	// Retrieve the current list of interfaces
 	ifis, err := net.Interfaces()
@@ -61,7 +56,7 @@ func (m *monitor) enumerate() {
 
 		// Assume that this error is temporary and try again next time
 		log.Println("[ERR]", err)
-		return
+		return oldNames
 	}
 
 	// Create a map of the interface names
@@ -70,28 +65,23 @@ func (m *monitor) enumerate() {
 		newNames[ifi.Name] = struct{}{}
 	}
 
-	// Write each of the new names to InterfaceAdded
-	for name, _ := range newNames {
-		if _, exists := m.oldNames[name]; !exists {
+	// Compare the two maps
+	m.compare(oldNames, newNames, m.InterfaceAdded)
+	m.compare(newNames, oldNames, m.InterfaceRemoved)
+
+	return newNames
+}
+
+// Compare two maps and notify of any changes on the specified channel
+func (m *monitor) compare(a, b map[string]struct{}, notify chan<- string) {
+	for name, _ := range b {
+		if _, exists := a[name]; !exists {
 			select {
-			case m.InterfaceAdded <- name:
+			case notify <- name:
 			case <-m.stop:
 			}
 		}
 	}
-
-	// Write each of the missing names to InterfaceRemoved
-	for name, _ := range m.oldNames {
-		if _, exists := newNames[name]; !exists {
-			select {
-			case m.InterfaceRemoved <- name:
-			case <-m.stop:
-			}
-		}
-	}
-
-	// Assign the new list to the monitor
-	m.oldNames = newNames
 }
 
 // Stop monitoring for new network interfaces
