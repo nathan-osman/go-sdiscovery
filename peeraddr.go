@@ -10,7 +10,7 @@ import (
 // that keeps track of the time between the last few pings received. In this
 // case, the lower the duration, the better.
 type peerAddr struct {
-	IP       *net.IP
+	ip       *net.IP
 	lastPing *ring.Ring
 }
 
@@ -19,7 +19,7 @@ func newPeerAddr(ip *net.IP, curTime time.Time) *peerAddr {
 
 	// Create the new peer address
 	p := &peerAddr{
-		IP:       ip,
+		ip:       ip,
 		lastPing: ring.New(6),
 	}
 
@@ -30,7 +30,7 @@ func newPeerAddr(ip *net.IP, curTime time.Time) *peerAddr {
 }
 
 // Register a ping against the address
-func (p *peerAddr) Ping(curTime time.Time) {
+func (p *peerAddr) ping(curTime time.Time) {
 
 	// Advance forward and record the current time
 	p.lastPing = p.lastPing.Next()
@@ -38,11 +38,16 @@ func (p *peerAddr) Ping(curTime time.Time) {
 }
 
 // Determine the duration between the oldest and most recent packet
-func (p *peerAddr) Duration() time.Duration {
+func (p *peerAddr) duration() time.Duration {
 
 	// Attempt to convert the "next" value (the oldest) to time.Time
 	oldestPing, _ := p.lastPing.Next().Value.(time.Time)
 
 	// Return the difference between the two pings
 	return p.lastPing.Value.(time.Time).Sub(oldestPing)
+}
+
+// Determine if the address has exceeded the specified timeout
+func (p *peerAddr) isExpired(timeout time.Duration, curTime time.Time) bool {
+	return curTime.Sub(p.lastPing.Value.(time.Time)) >= timeout
 }
