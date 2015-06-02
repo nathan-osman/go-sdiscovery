@@ -20,15 +20,15 @@ func validElementsInRing(r *ring.Ring) int {
 // Test the Ping() method
 func Test_Ping(t *testing.T) {
 
-	// Create a new peerAddress and confirm that it contains one item
-	p := newPeerAddress(nil, time.Now())
-	if validElementsInRing(p.lastPing) != 1 {
+	// Create a new peerAddr and confirm that it contains one item
+	peerAddr := newPeerAddr(nil, time.Now())
+	if validElementsInRing(peerAddr.lastPing) != 1 {
 		t.Fatal("Expected one element in ring")
 	}
 
 	// Register a ping and confirm that the ring now contains two items
-	p.Ping(time.Now())
-	if validElementsInRing(p.lastPing) != 2 {
+	peerAddr.Ping(time.Now())
+	if validElementsInRing(peerAddr.lastPing) != 2 {
 		t.Fatal("Expected two elements in ring")
 	}
 }
@@ -40,16 +40,16 @@ func Test_Duration(t *testing.T) {
 	ping1 := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
 	ping2 := ping1.Add(time.Hour)
 
-	// Create a peerAddress
-	p := newPeerAddress(nil, ping1)
+	// Create a peerAddr
+	peerAddr := newPeerAddr(nil, ping1)
 
 	// Ping the address five more times
 	for i := 0; i < 5; i++ {
-		p.Ping(ping2)
+		peerAddr.Ping(ping2)
 	}
 
 	// The duration should be one hour
-	if p.Duration() != time.Hour {
+	if peerAddr.Duration() != time.Hour {
 		t.Fatal("Duration does not match")
 	}
 }

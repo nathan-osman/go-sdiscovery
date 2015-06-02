@@ -6,39 +6,39 @@ import (
 	"time"
 )
 
-// peerAddress contains a single address that has received packets and a ring
+// peerAddr contains a single address that has received packets and a ring
 // that keeps track of the time between the last few pings received. In this
 // case, the lower the duration, the better.
-type peerAddress struct {
+type peerAddr struct {
 	IP       *net.IP
 	lastPing *ring.Ring
 }
 
-// Create a new peerAddress
-func newPeerAddress(ip *net.IP, t time.Time) *peerAddress {
+// Create a new peerAddr
+func newPeerAddr(ip *net.IP, curTime time.Time) *peerAddr {
 
 	// Create the new peer address
-	p := &peerAddress{
+	p := &peerAddr{
 		IP:       ip,
 		lastPing: ring.New(6),
 	}
 
 	// Record the current ping
-	p.lastPing.Value = t
+	p.lastPing.Value = curTime
 
 	return p
 }
 
 // Register a ping against the address
-func (p *peerAddress) Ping(t time.Time) {
+func (p *peerAddr) Ping(curTime time.Time) {
 
 	// Advance forward and record the current time
 	p.lastPing = p.lastPing.Next()
-	p.lastPing.Value = t
+	p.lastPing.Value = curTime
 }
 
 // Determine the duration between the oldest and most recent packet
-func (p *peerAddress) Duration() time.Duration {
+func (p *peerAddr) Duration() time.Duration {
 
 	// Attempt to convert the "next" value (the oldest) to time.Time
 	oldestPing, _ := p.lastPing.Next().Value.(time.Time)
