@@ -16,11 +16,11 @@ type peer struct {
 func (p *peer) ping(pkt *packet, curTime time.Time) {
 
 	// Store userData
-	p.userData = pkt.userData
+	p.userData = pkt.UserData
 
 	// Attempt to find a matching address
 	for _, addr := range p.addrs {
-		if pkt.ip == addr.ip {
+		if pkt.ip.Equal(addr.ip) {
 			addr.ping(curTime)
 			return
 		}

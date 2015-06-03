@@ -14,16 +14,16 @@ type ServiceConfig struct {
 	PeerTimeout  time.Duration // time after which a peer is considered unreachable
 	Port         int           // port used for broadcast and multicast
 	ID           string        // unique identifier for the current machine
-	UserData     struct{}      // data sent with each packet to other peers
+	UserData     []byte        // data sent with each packet to other peers
 }
 
 // Service sends and receives packets on local network interfaces in order to
 // discover other peers providing the service and announce its presence.
 type Service struct {
-	PeerAdded   chan Peer // indicates that a new peer was found
-	PeerRemoved chan Peer // indicates that an existing peer has timed out
+	PeerAdded   chan string // indicates that a new peer was found
+	PeerRemoved chan string // indicates that an existing peer has timed out
 	stop        chan struct{}
-	peers       map[string]Peer
+	peers       map[string]*peer
 	config      ServiceConfig
 }
 
@@ -31,10 +31,10 @@ type Service struct {
 func NewService(config ServiceConfig) *Service {
 
 	s := &Service{
-		PeerAdded:   make(chan Peer),
-		PeerRemoved: make(chan Peer),
+		PeerAdded:   make(chan string),
+		PeerRemoved: make(chan string),
 		stop:        make(chan struct{}),
-		peers:       make(map[string]Peer),
+		peers:       make(map[string]*peer),
 		config:      config,
 	}
 
@@ -51,7 +51,7 @@ func (s *Service) run() {
 
 	// Create a communicator for sending and receiving packets
 	communicator := newCommunicator(s.config.PollInterval, s.config.Port)
-	defer communicator.Stop()
+	defer communicator.stop()
 
 	// Create a ticker for sending pings
 	pingTicker := time.NewTicker(s.config.PingInterval)
@@ -61,12 +61,20 @@ func (s *Service) run() {
 	timeoutTicker := time.NewTicker(s.config.PeerTimeout)
 	defer timeoutTicker.Stop()
 
+	// TODO:
+	pkt := &packet{
+		ID:       s.config.ID,
+		UserData: s.config.UserData,
+	}
+	dd, _ := pkt.toJSON()
+
 	for {
+
 		select {
-		case p := <-communicator.PacketReceived:
+		case p := <-communicator.packetReceived:
 			s.processPacket(p)
 		case <-pingTicker.C:
-			communicator.Send(s.config.ID, s.config.UserData)
+			communicator.send(dd)
 		case <-timeoutTicker.C:
 			s.processPeers()
 		case <-s.stop:
@@ -76,34 +84,37 @@ func (s *Service) run() {
 }
 
 // Process a packet received
-func (s *Service) processPacket(p packet) {
+func (s *Service) processPacket(pkt *packet) {
 
 	// Only process packets that did not originate from here
-	if p.ID != s.config.ID {
+	if pkt.ID != s.config.ID {
 
 		// If the peer does not exist, create a new one
-		_, exists := s.peers[p.ID]
+		_, exists := s.peers[pkt.ID]
 		if !exists {
-			s.peers[p.ID] = Peer{}
+			s.peers[pkt.ID] = &peer{}
 		}
 
 		// Update the peer
-		s.peers[p.ID].Update(s.config.PeerTimeout)
+		s.peers[pkt.ID].ping(pkt, time.Now())
 
 		// Write to the PeerAdded channel if the peer is new
 		if !exists {
-			s.PeerAdded <- s.peers[p.ID]
+			s.PeerAdded <- pkt.ID
 		}
 	}
 }
 
 // Check for peer timeouts
 func (s *Service) processPeers() {
+
+	curTime := time.Now()
+
 	for id, peer := range s.peers {
-		if peer.HasExpired() {
+		if peer.isExpired(s.config.PeerTimeout, curTime) {
 
 			// Write to the PeerRemoved channel and delete it
-			s.PeerRemoved <- peer
+			s.PeerRemoved <- id
 			delete(s.peers, id)
 		}
 	}

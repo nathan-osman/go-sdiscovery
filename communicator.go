@@ -9,9 +9,9 @@ import (
 
 // Network interface manager and packet monitor
 type communicator struct {
-	PacketReceived chan packet
-	send           chan []byte
-	stop           chan struct{}
+	packetReceived chan *packet
+	sendChan       chan []byte
+	stopChan       chan struct{}
 	connections    map[string][]*connection
 	port           int
 }
@@ -23,9 +23,9 @@ func newCommunicator(pollInterval time.Duration, port int) *communicator {
 	// for receiving the individual packets and the mapping between
 	// interface names and the individual connections for them
 	c := &communicator{
-		PacketReceived: make(chan packet),
-		send:           make(chan []byte),
-		stop:           make(chan struct{}),
+		packetReceived: make(chan *packet),
+		sendChan:       make(chan []byte),
+		stopChan:       make(chan struct{}),
 		connections:    make(map[string][]*connection),
 		port:           port,
 	}
@@ -54,16 +54,16 @@ loop:
 			c.addInterface(name, &waitGroup)
 		case name := <-monitor.InterfaceRemoved:
 			c.removeInterface(name)
-		case data := <-c.send:
+		case data := <-c.sendChan:
 
 			// Send on each of the connections
 			for _, connections := range c.connections {
 				for _, connection := range connections {
-					connection.Send(data)
+					connection.send(data)
 				}
 			}
 
-		case <-c.stop:
+		case <-c.stopChan:
 			break loop
 		}
 	}
@@ -75,7 +75,7 @@ loop:
 
 	// Wait for the connections to finish then close the channel
 	waitGroup.Wait()
-	close(c.PacketReceived)
+	close(c.packetReceived)
 }
 
 // Add connections for the specified interface
@@ -94,7 +94,7 @@ func (c *communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 	// Add a connection for broadcast and multicast addresses if present
 	for _, multicast := range []bool{true, false} {
 		if ifi.Flags&net.FlagBroadcast != 0 {
-			if conn, err := newConnection(c.PacketReceived, waitGroup, multicast, ifi, c.port); err != nil {
+			if conn, err := newConnection(c.packetReceived, waitGroup, ifi, c.port, multicast); err != nil {
 				log.Println("[ERR]", err)
 			} else {
 				connections = append(connections, conn)
@@ -116,7 +116,7 @@ func (c *communicator) removeInterface(name string) {
 
 		// Stop the connections
 		for _, connection := range connections {
-			connection.Stop()
+			connection.stop()
 		}
 
 		// Remove the item from the map
@@ -125,12 +125,12 @@ func (c *communicator) removeInterface(name string) {
 }
 
 // Send the specified data on each of the connections
-func (c *communicator) Send(data []byte) {
-	c.send <- data
+func (c *communicator) send(data []byte) {
+	c.sendChan <- data
 }
 
 // Stop the goroutine by closing the channels
-func (c *communicator) Stop() {
-	close(c.send)
-	close(c.stop)
+func (c *communicator) stop() {
+	close(c.sendChan)
+	close(c.stopChan)
 }

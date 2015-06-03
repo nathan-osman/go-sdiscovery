@@ -10,12 +10,12 @@ import (
 // that keeps track of the time between the last few pings received. In this
 // case, the lower the duration, the better.
 type peerAddr struct {
-	ip       *net.IP
+	ip       net.IP
 	lastPing *ring.Ring
 }
 
 // Create a new peerAddr
-func newPeerAddr(ip *net.IP, curTime time.Time) *peerAddr {
+func newPeerAddr(ip net.IP, curTime time.Time) *peerAddr {
 
 	// Create the new peer address
 	p := &peerAddr{

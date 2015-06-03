@@ -1,13 +1,6 @@
 package sdiscovery
 
-import (
-	"bytes"
-	"errors"
-	"net"
-	"sync"
-	"testing"
-	"time"
-)
+/*
 
 // Attempt to find an interface with the specified flags
 func findInterfaceWithFlags(flags net.Flags) (*net.Interface, error) {
@@ -101,3 +94,5 @@ func Test_connection_multicast(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+*/

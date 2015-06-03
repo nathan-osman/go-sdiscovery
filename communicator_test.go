@@ -1,10 +1,6 @@
 package sdiscovery
 
-import (
-	"net"
-	"testing"
-	"time"
-)
+/*
 
 // Test that connections are added correctly for interfaces
 func Test_addInterface(t *testing.T) {
@@ -32,3 +28,5 @@ func Test_addInterface(t *testing.T) {
 		t.Fatal("No connections were established")
 	}
 }
+
+*/

@@ -5,22 +5,16 @@ import (
 	"sync"
 )
 
-// Data about an individual packet received from a connection
-type packet struct {
-	IP   net.IP
-	Data []byte
-}
-
 // Sender and receiver for packets over a network connection
 type connection struct {
-	packetReceived chan<- packet
-	stop           chan struct{}
-	conn           *net.UDPConn
-	waitGroup      *sync.WaitGroup
+	packetChan chan<- *packet
+	stopChan   chan struct{}
+	conn       *net.UDPConn
+	waitGroup  *sync.WaitGroup
 }
 
 // Create a new connection for sending and receiving packets
-func newConnection(packetReceived chan<- packet, waitGroup *sync.WaitGroup, multicast bool, ifi *net.Interface, port int) (*connection, error) {
+func newConnection(packetChan chan<- *packet, waitGroup *sync.WaitGroup, ifi *net.Interface, port int, multicast bool) (*connection, error) {
 
 	var (
 		conn *net.UDPConn
@@ -57,10 +51,10 @@ func newConnection(packetReceived chan<- packet, waitGroup *sync.WaitGroup, mult
 
 	// Create the connection
 	c := &connection{
-		packetReceived: packetReceived,
-		stop:           make(chan struct{}),
-		conn:           conn,
-		waitGroup:      waitGroup,
+		packetChan: packetChan,
+		stopChan:   make(chan struct{}),
+		conn:       conn,
+		waitGroup:  waitGroup,
 	}
 
 	// Spawn a goroutine to read from the socket
@@ -79,36 +73,37 @@ func (c *connection) run() {
 	for {
 
 		// Put a hard cap of 1000 bytes on the packet size
+		// TODO: grab the MTU from the interface
 		b := make([]byte, 1000)
 
-		// Read the packet, quitting the goroutine on error
+		// Read the packet, quitting on error
 		n, addr, err := c.conn.ReadFromUDP(b)
 		if err != nil {
-			return
+			break
 		}
 
-		// Create the packet
-		p := packet{
-			IP:   addr.IP,
-			Data: b[:n],
+		// Attempt to create the packet
+		pkt, err := newPacketFromJSON(addr.IP, b[:n])
+		if err != nil {
+			continue
 		}
 
 		// Write the packet to the channel
 		select {
-		case c.packetReceived <- p:
-		case <-c.stop:
+		case c.packetChan <- pkt:
+		case <-c.stopChan:
 		}
 	}
 }
 
 // Send a packet over the connection
-func (c *connection) Send(data []byte) error {
+func (c *connection) send(data []byte) error {
 	_, err := c.conn.WriteToUDP(data, c.conn.LocalAddr().(*net.UDPAddr))
 	return err
 }
 
 // Stop listening for incoming packets
-func (c *connection) Stop() {
+func (c *connection) stop() {
 	c.conn.Close()
-	close(c.stop)
+	close(c.stopChan)
 }
