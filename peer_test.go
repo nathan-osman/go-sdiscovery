@@ -5,53 +5,35 @@ import (
 	"time"
 )
 
-// Test that addresses are properly expired when no pings are received
-func Test_Update(t *testing.T) {
+// Test the ping() method
+func Test_peer_ping(t *testing.T) {
 
-	// Create a new peer with the last ping set to the current time
-	peer := &Peer{
-		Addresses: []PeerAddress{
-			{
-				IP:         nil,
-				lastPacket: time.Now(),
-			},
-		},
+	// Create an empty peer
+	times := generateTimes()
+	p := &peer{}
+
+	// Ping the peer twice
+	for i := 0; i < 2; i++ {
+		p.ping(&packet{}, times[0])
 	}
 
-	// Update the peer and ensure the address has not expired
-	peer.Update(time.Second)
-	if len(peer.Addresses) != 1 {
-		t.Fatal("Address expired unexpectedly")
-	}
-
-	// Change the time of last packet to two seconds ago
-	peer.Addresses[0].lastPacket = time.Now().Add(-2 * time.Second)
-
-	// Update the peer again and ensure the address expired
-	peer.Update(time.Second)
-	if len(peer.Addresses) != 0 {
-		t.Fatal("Address has not expired")
+	// There should be one address in the peer
+	if len(p.addrs) != 1 {
+		t.Fatal("Expected exactly one address")
 	}
 }
 
-// Test that peers are properly expired when no addresses remain
-func Test_HasExpired(t *testing.T) {
+// Test the isExpired() method
+func Test_peer_isExpired(t *testing.T) {
 
-	// Create a new peer with a single address
-	peer := &Peer{
-		Addresses: []PeerAddress{{}},
+	// Create a peer with an expired address
+	times := generateTimes(2 * time.Second)
+	p := &peer{
+		addrs: []*peerAddr{newPeerAddr(nil, times[0])},
 	}
 
-	// The peer should not have expired
-	if peer.HasExpired() {
-		t.Fatal("Peer expired unexpectedly")
-	}
-
-	// Remove the address
-	peer.Addresses = []PeerAddress{}
-
-	// The peer should now have expired
-	if !peer.HasExpired() {
-		t.Fatal("Peer has not expired")
+	// The peer should have expired
+	if !p.isExpired(time.Second, times[1]) {
+		t.Fatal("Peer should be expired")
 	}
 }

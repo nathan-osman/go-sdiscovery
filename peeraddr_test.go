@@ -17,8 +17,23 @@ func validElementsInRing(r *ring.Ring) int {
 	return i
 }
 
+// Generate times that differ by the specified durations
+func generateTimes(durations ...time.Duration) []time.Time {
+
+	// Create a slice for storing the times and add the first one
+	times := make([]time.Time, len(durations)+1)
+	times[0] = time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	// Add each of the durations
+	for i, duration := range durations {
+		times[i+1] = times[i].Add(duration)
+	}
+
+	return times
+}
+
 // Test the ping() method
-func Test_ping(t *testing.T) {
+func Test_peerAddr_ping(t *testing.T) {
 
 	// Create a new peerAddr and confirm that it contains one item
 	p := newPeerAddr(nil, time.Now())
@@ -34,38 +49,36 @@ func Test_ping(t *testing.T) {
 }
 
 // Test the duration() method
-func Test_duration(t *testing.T) {
+func Test_peerAddr_duration(t *testing.T) {
 
-	// Create two times with a known difference (one hour)
-	ping1 := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
-	ping2 := ping1.Add(time.Hour)
+	// Create two times with a known difference (one second)
+	times := generateTimes(time.Second)
 
 	// Create a peerAddr
-	p := newPeerAddr(nil, ping1)
+	p := newPeerAddr(nil, times[0])
 
 	// Ping the address five more times
 	for i := 0; i < 5; i++ {
-		p.ping(ping2)
+		p.ping(times[1])
 	}
 
 	// The duration should be one hour
-	if p.duration() != time.Hour {
+	if p.duration() != time.Second {
 		t.Fatal("Duration does not match")
 	}
 }
 
 // Test the isExpired() method
-func Test_isExpired(t *testing.T) {
+func Test_peerAddr_isExpired(t *testing.T) {
 
-	// Create two times with a known difference (five seconds)
-	time1 := time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
-	time2 := time1.Add(5 * time.Second)
+	// Create two times with a known difference (two seconds)
+	times := generateTimes(2 * time.Second)
 
 	// Create a new peerAddr with the first time
-	p := newPeerAddr(nil, time1)
+	p := newPeerAddr(nil, times[0])
 
-	// Assuming a timeout of three seconds, the address should have expired
-	if !p.isExpired(3*time.Second, time2) {
+	// Assuming a timeout of one second, the address should have expired
+	if !p.isExpired(1*time.Second, times[1]) {
 		t.Fatal("Address should have expired")
 	}
 }

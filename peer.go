@@ -1,43 +1,48 @@
 package sdiscovery
 
 import (
-	"encoding/json"
-	"net"
 	"time"
 )
 
-// Peer address obtained from received packets
-type PeerAddress struct {
-	IP         *net.IP
-	lastPacket time.Time
+// peer maintains information about a peer discovered on the network. Because
+// the struct may be used from multiple goroutines, all access to members must
+// be done through accessors that lock a mutex.
+type peer struct {
+	userData []byte
+	addrs    []*peerAddr
 }
 
-// Peer found through local discovery
-type Peer struct {
-	ID        string          `json:"id"`
-	UserData  json.RawMessage `json:"user_data"`
-	Addresses []PeerAddress
+// Record a ping from the specified address
+func (p *peer) ping(pkt *packet, curTime time.Time) {
+
+	// Store userData
+	p.userData = pkt.userData
+
+	// Attempt to find a matching address
+	for _, addr := range p.addrs {
+		if pkt.ip == addr.ip {
+			addr.ping(curTime)
+			return
+		}
+	}
+
+	// No matching address was found, add a new one
+	p.addrs = append(p.addrs, newPeerAddr(pkt.ip, curTime))
 }
 
-// Check each of the peer's addresses to determine if any have expired. The
-// specified timeout value is used to determine when this occurs.
-func (p *Peer) Update(timeout time.Duration) {
-
-	// Obtain the current time
-	curTime := time.Now()
+// Remove all expired addresses and sort those that remain
+func (p *peer) isExpired(timeout time.Duration, curTime time.Time) bool {
 
 	// Create an empty slice pointing to the old array and filter the
 	// addresses based on whether they have expired or not
-	addresses := p.Addresses[:0]
-	for _, addr := range p.Addresses {
-		if !addr.lastPacket.Add(timeout).Before(curTime) {
-			addresses = append(addresses, addr)
+	addrs := p.addrs[:0]
+	for _, addr := range p.addrs {
+		if !addr.isExpired(timeout, curTime) {
+			addrs = append(addrs, addr)
 		}
 	}
-	p.Addresses = addresses
-}
+	p.addrs = addrs
 
-// Determine if the peer has any valid addresses remaining.
-func (p *Peer) HasExpired() bool {
-	return len(p.Addresses) == 0
+	// Return true if no addresses remain
+	return len(p.addrs) == 0
 }
