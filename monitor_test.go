@@ -28,7 +28,7 @@ func Test_enumerate(t *testing.T) {
 
 	// Create a monitor
 	monitor := newMonitor(50 * time.Millisecond)
-	defer monitor.Stop()
+	defer monitor.stop()
 
 	// Wait for the interfaces to be enumerated
 	timeout := time.After(150 * time.Millisecond)
@@ -36,9 +36,9 @@ func Test_enumerate(t *testing.T) {
 loop:
 	for {
 		select {
-		case name := <-monitor.InterfaceAdded:
+		case name := <-monitor.interfaceAdded:
 			monitorNames = append(monitorNames, name)
-		case <-monitor.InterfaceRemoved:
+		case <-monitor.interfaceRemoved:
 			t.Fatal("Interface removed unexpectedly")
 		case <-timeout:
 			break loop

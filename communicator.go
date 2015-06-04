@@ -41,7 +41,7 @@ func (c *communicator) run(pollInterval time.Duration) {
 
 	// Monitor for interface additions and removals
 	monitor := newMonitor(pollInterval)
-	defer monitor.Stop()
+	defer monitor.stop()
 
 	// Create a WaitGroup for each of the sockets so that we can
 	// ensure all of them end before closing the packet channel
@@ -50,9 +50,9 @@ func (c *communicator) run(pollInterval time.Duration) {
 loop:
 	for {
 		select {
-		case name := <-monitor.InterfaceAdded:
+		case name := <-monitor.interfaceAdded:
 			c.addInterface(name, &waitGroup)
-		case name := <-monitor.InterfaceRemoved:
+		case name := <-monitor.interfaceRemoved:
 			c.removeInterface(name)
 		case data := <-c.sendChan:
 
