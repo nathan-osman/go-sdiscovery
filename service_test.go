@@ -1,5 +1,9 @@
 package sdiscovery
 
+func Test_stuff(t *testing.T) {
+
+}
+
 /*
 
 func Test_checkPeerTimeouts(t *testing.T) {

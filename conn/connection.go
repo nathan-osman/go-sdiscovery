@@ -1,4 +1,4 @@
-package sdiscovery
+package conn
 
 import (
 	"net"

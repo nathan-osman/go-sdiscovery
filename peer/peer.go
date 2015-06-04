@@ -1,19 +1,19 @@
-package sdiscovery
+package peer
 
 import (
 	"time"
 )
 
-// peer maintains information about a peer discovered on the network. Because
+// Peer maintains information about a peer discovered on the network. Because
 // the struct may be used from multiple goroutines, all access to members must
 // be done through accessors that lock a mutex.
-type peer struct {
+type Peer struct {
 	userData []byte
 	addrs    []*peerAddr
 }
 
 // Record a ping from the specified address
-func (p *peer) ping(pkt *packet, curTime time.Time) {
+func (p *Peer) ping(pkt *packet, curTime time.Time) {
 
 	// Store userData
 	p.userData = pkt.UserData
@@ -31,7 +31,7 @@ func (p *peer) ping(pkt *packet, curTime time.Time) {
 }
 
 // Remove all expired addresses and sort those that remain
-func (p *peer) isExpired(timeout time.Duration, curTime time.Time) bool {
+func (p *Peer) isExpired(timeout time.Duration, curTime time.Time) bool {
 
 	// Create an empty slice pointing to the old array and filter the
 	// addresses based on whether they have expired or not

@@ -2,6 +2,9 @@ package sdiscovery
 
 import (
 	"time"
+
+	"github.com/nathan-osman/go-sdiscovery/conn"
+	"github.com/nathan-osman/go-sdiscovery/peer"
 )
 
 // ServiceConfig contains the parameters that control how the service behaves.
@@ -23,7 +26,7 @@ type Service struct {
 	PeerAdded   chan string // indicates that a new peer was found
 	PeerRemoved chan string // indicates that an existing peer has timed out
 	stop        chan struct{}
-	peers       map[string]*peer
+	peers       map[string]*peer.Peer
 	config      ServiceConfig
 }
 
@@ -34,7 +37,7 @@ func NewService(config ServiceConfig) *Service {
 		PeerAdded:   make(chan string),
 		PeerRemoved: make(chan string),
 		stop:        make(chan struct{}),
-		peers:       make(map[string]*peer),
+		peers:       make(map[string]*peer.Peer),
 		config:      config,
 	}
 
@@ -50,7 +53,7 @@ func NewService(config ServiceConfig) *Service {
 func (s *Service) run() {
 
 	// Create a communicator for sending and receiving packets
-	communicator := newCommunicator(s.config.PollInterval, s.config.Port)
+	communicator := conn.newCommunicator(s.config.PollInterval, s.config.Port)
 	defer communicator.stop()
 
 	// Create a ticker for sending pings
