@@ -1,6 +1,8 @@
 package sdiscovery
 
 import (
+	"container/list"
+	"reflect"
 	"time"
 )
 
@@ -15,61 +17,109 @@ type EnumerateFunc func() StringMap
 type StrEnum struct {
 	StringAdded   chan string // notify when a string is added
 	StringRemoved chan string // notify when a string is removed
-	stopChan      chan interface{}
 }
 
 // Create a new enumerator with the specified enumeration function. The
-// enumeration process will begin immediately and continue at the specified
-// interval.
-func NewStrEnum(duration time.Duration, enumFunc EnumerateFunc) *StrEnum {
+// enumeration process will run each time a value is received from enumChan
+// until it is closed.
+func NewStrEnum(enumChan <-chan time.Time, enumFunc EnumerateFunc) *StrEnum {
 
 	// Create a new enumerator
 	s := &StrEnum{
 		StringAdded:   make(chan string),
 		StringRemoved: make(chan string),
-		stopChan:      make(chan interface{}),
 	}
 
 	// Launch a separate goroutine to perform the enumeration
-	go s.run(duration, enumFunc)
+	go s.run(enumChan, enumFunc)
 
 	return s
 }
 
 // Continually invoke the enumerator until stopped.
-func (s *StrEnum) run(duration time.Duration, enumFunc EnumerateFunc) {
+func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumerateFunc) {
 
-	// Map of strings from the previous enumeration
+	// Map of strings from the previous enumeration and lists of items that
+	// need to be sent on one of the notification channels
 	oldStrings := enumFunc()
+	stringsAdded, stringsRemoved := list.New(), list.New()
 
 	for {
-		select {
-		case <-time.After(duration):
-			newStrings := enumFunc()
-			s.compare(oldStrings, newStrings, s.StringAdded)
-			s.compare(newStrings, oldStrings, s.StringRemoved)
-			oldStrings = newStrings
-		case <-s.stopChan:
-			close(s.StringAdded)
-			close(s.StringRemoved)
-			return
+
+		// Use constants to make it a bit easier to see what's going on.
+		const (
+			enumCase = iota
+			addCase
+			removeCase
+			numCases
+		)
+
+		// A runtime select is needed here in order to avoid a deadlock.
+		// Whenever enumeration indicates that notifications should be sent,
+		// this needs to take place within the same select as enumChan. Since
+		// sending on these channels can block, there needs to be a way to
+		// abort the send if the enumChan is closed.
+		cases := make([]reflect.SelectCase, numCases)
+		cases[enumCase].Dir = reflect.SelectRecv
+		cases[enumCase].Chan = reflect.ValueOf(enumChan)
+		cases[addCase].Dir = reflect.SelectSend
+		cases[removeCase].Dir = reflect.SelectSend
+
+		// If there are values waiting to be sent on either of the two channels
+		// then fill in the appropriate fields in each of the cases.
+		if stringsAdded.Len() != 0 {
+			cases[addCase].Chan = reflect.ValueOf(s.StringAdded)
+			cases[addCase].Send = reflect.ValueOf(stringsAdded.Front().Value.(string))
+		}
+		if stringsRemoved.Len() != 0 {
+			cases[removeCase].Chan = reflect.ValueOf(s.StringRemoved)
+			cases[removeCase].Send = reflect.ValueOf(stringsRemoved.Front().Value.(string))
+		}
+
+		// Perform the select. The value received is ignored.
+		i, _, ok := reflect.Select(cases)
+
+		// Perform the appropriate action based on the case index.
+		switch i {
+		case enumCase:
+
+			// If the receive was successful, perform another enumeration.
+			// Otherwise, the channel was closed and the loop should quit.
+			if ok {
+
+				newStrings := enumFunc()
+				stringsAdded.PushBackList(s.compare(oldStrings, newStrings))
+				stringsRemoved.PushBackList(s.compare(newStrings, oldStrings))
+				oldStrings = newStrings
+
+			} else {
+				break
+			}
+
+		case addCase:
+			stringsAdded.Remove(stringsAdded.Front())
+		case removeCase:
+			stringsRemoved.Remove(stringsRemoved.Front())
 		}
 	}
+
+	close(s.StringAdded)
+	close(s.StringRemoved)
 }
 
-// Compare two maps and notify of any changes on the specified channel
-func (s *StrEnum) compare(a, b map[string]interface{}, notifyChan chan<- string) {
+// Compare two maps and return a list of any changes.
+func (s *StrEnum) compare(a, b StringMap) *list.List {
+
+	// Create an empty list for new items.
+	l := list.New()
+
+	// Check each of the items in map b to see if they exist in map a. If not,
+	// add them to the list.
 	for item, _ := range b {
 		if _, exists := a[item]; !exists {
-			select {
-			case notifyChan <- item:
-			case <-s.stopChan:
-			}
+			l.PushBack(item)
 		}
 	}
-}
 
-// Immediately stop the enumerator.
-func (s *StrEnum) Stop() {
-	s.stopChan <- nil
+	return l
 }
