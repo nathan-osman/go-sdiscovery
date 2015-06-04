@@ -3,6 +3,8 @@ package sdiscovery
 import (
 	"net"
 	"sync"
+
+	"github.com/nathan-osman/go-sdiscovery/util"
 )
 
 // Sender and receiver for packets over a network connection
@@ -32,7 +34,7 @@ func newConnection(packetChan chan<- *packet, waitGroup *sync.WaitGroup, ifi *ne
 	} else {
 
 		// Attempt to find an IPv4 broadcast address
-		ip, err := findBroadcastAddress(ifi)
+		ip, err := util.FindBroadcastAddress(ifi)
 		if err != nil {
 			return nil, err
 		}

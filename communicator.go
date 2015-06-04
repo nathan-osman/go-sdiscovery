@@ -5,6 +5,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/nathan-osman/go-sdiscovery/util"
 )
 
 // Network interface manager and packet monitor
@@ -39,9 +41,25 @@ func newCommunicator(pollInterval time.Duration, port int) *communicator {
 // Add and remove connections as interfaces are added and removed
 func (c *communicator) run(pollInterval time.Duration) {
 
-	// Monitor for interface additions and removals
-	monitor := newMonitor(pollInterval)
-	defer monitor.stop()
+	// Enumerate interface additions and removals
+	ticker := time.NewTicker(pollInterval)
+	ifiEnum := util.NewStrEnum(ticker.C, func() (util.StrMap, error) {
+
+		// Retrieve the current list of interfaces
+		ifis, err := net.Interfaces()
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a map of the interface names
+		newNames := make(util.StrMap)
+		for _, ifi := range ifis {
+			newNames[ifi.Name] = nil
+		}
+
+		return newNames, nil
+	})
+	defer ticker.Stop()
 
 	// Create a WaitGroup for each of the sockets so that we can
 	// ensure all of them end before closing the packet channel
@@ -50,9 +68,9 @@ func (c *communicator) run(pollInterval time.Duration) {
 loop:
 	for {
 		select {
-		case name := <-monitor.interfaceAdded:
+		case name := <-ifiEnum.StringAdded:
 			c.addInterface(name, &waitGroup)
-		case name := <-monitor.interfaceRemoved:
+		case name := <-ifiEnum.StringRemoved:
 			c.removeInterface(name)
 		case data := <-c.sendChan:
 

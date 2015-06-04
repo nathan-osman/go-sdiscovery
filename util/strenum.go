@@ -1,7 +1,8 @@
-package sdiscovery
+package util
 
 import (
 	"container/list"
+	"log"
 	"reflect"
 	"time"
 )
@@ -10,7 +11,7 @@ import (
 type StrMap map[string]interface{}
 
 // Function that enumerates a list of strings.
-type EnumFunc func() StrMap
+type EnumFunc func() (StrMap, error)
 
 // StrEnum provides a simple mechanism for periodically invoking a function
 // that enumerates strings and indicating when items are added or removed.
@@ -87,13 +88,14 @@ func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumFunc) {
 			// Otherwise, the channel was closed and the loop should quit.
 			if ok {
 
-				newStrings := enumFunc()
-
-				stringsAdded.PushBackList(s.compare(oldStrings, newStrings))
-				stringsRemoved.PushBackList(s.compare(newStrings, oldStrings))
-
-				oldStrings = newStrings
-
+				// Log and ignore any errors
+				if newStrings, err := enumFunc(); err != nil {
+					log.Println("[ERR]", err)
+				} else {
+					stringsAdded.PushBackList(s.compare(oldStrings, newStrings))
+					stringsRemoved.PushBackList(s.compare(newStrings, oldStrings))
+					oldStrings = newStrings
+				}
 			} else {
 				break
 			}

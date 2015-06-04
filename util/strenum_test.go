@@ -1,4 +1,4 @@
-package sdiscovery
+package util
 
 import (
 	"testing"
@@ -27,8 +27,8 @@ func Test_StrEnum(t *testing.T) {
 	strMap := StrMap{"a": nil}
 
 	// Create an enumerator that returns the current value of the map.
-	strEnum := NewStrEnum(enumChan, func() StrMap {
-		return strMap
+	strEnum := NewStrEnum(enumChan, func() (StrMap, error) {
+		return strMap, nil
 	})
 
 	// Enumerate the map.
