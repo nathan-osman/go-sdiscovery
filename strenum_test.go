@@ -1,7 +1,6 @@
 package sdiscovery
 
 import (
-	"strconv"
 	"testing"
 	"time"
 )
@@ -20,22 +19,32 @@ func readStringFromChannel(orig string, c chan string) bool {
 // removed from a map.
 func Test_StrEnum(t *testing.T) {
 
-	// In order to ensure different items are returned each time the enumerate
-	// function is invoked, use a local integer variable
-	i := 0
+	// Create a new channel for enumeration.
+	enumChan := make(chan time.Time)
+	defer close(enumChan)
 
-	// Create a new StrEnum with the specified interval and supply a function
-	// that returns a predefined sequence of maps
-	c := make(chan time.Time)
-	s := NewStrEnum(c, func() StringMap {
-		i++
-		return StringMap{strconv.FormatInt(int64(i), 10): nil}
+	// Use a variable to store a map of strings for the EnumFunc.
+	strMap := StrMap{"a": nil}
+
+	// Create an enumerator that returns the current value of the map.
+	strEnum := NewStrEnum(enumChan, func() StrMap {
+		return strMap
 	})
 
-	// Attempt to read the first value
-	c <- time.Now()
-	if !readStringFromChannel("2", s.StringAdded) ||
-		!readStringFromChannel("1", s.StringRemoved) {
-		t.Fatal("Unable to read expected values from channels")
+	// Enumerate the map.
+	enumChan <- time.Now()
+
+	// Attempt to read the second value.
+	if !readStringFromChannel("a", strEnum.StringAdded) {
+		t.Fatal("Unable to read initial value from channel")
+	}
+
+	// Remove the first value and enumerate again.
+	strMap = StrMap{}
+	enumChan <- time.Now()
+
+	// Ensure the first value was removed.
+	if !readStringFromChannel("a", strEnum.StringRemoved) {
+		t.Fatal("Initial value was not removed")
 	}
 }

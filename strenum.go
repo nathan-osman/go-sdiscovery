@@ -7,10 +7,10 @@ import (
 )
 
 // Map of strings.
-type StringMap map[string]interface{}
+type StrMap map[string]interface{}
 
 // Function that enumerates a list of strings.
-type EnumerateFunc func() StringMap
+type EnumFunc func() StrMap
 
 // StrEnum provides a simple mechanism for periodically invoking a function
 // that enumerates strings and indicating when items are added or removed.
@@ -21,8 +21,8 @@ type StrEnum struct {
 
 // Create a new enumerator with the specified enumeration function. The
 // enumeration process will run each time a value is received from enumChan
-// until it is closed.
-func NewStrEnum(enumChan <-chan time.Time, enumFunc EnumerateFunc) *StrEnum {
+// until it is closed. Note that enumFunc must not modify the map it returns.
+func NewStrEnum(enumChan <-chan time.Time, enumFunc EnumFunc) *StrEnum {
 
 	// Create a new enumerator
 	s := &StrEnum{
@@ -37,11 +37,11 @@ func NewStrEnum(enumChan <-chan time.Time, enumFunc EnumerateFunc) *StrEnum {
 }
 
 // Continually invoke the enumerator until stopped.
-func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumerateFunc) {
+func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumFunc) {
 
 	// Map of strings from the previous enumeration and lists of items that
 	// need to be sent on one of the notification channels
-	oldStrings := enumFunc()
+	oldStrings := StrMap{}
 	stringsAdded, stringsRemoved := list.New(), list.New()
 
 	for {
@@ -88,8 +88,10 @@ func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumerateFunc) {
 			if ok {
 
 				newStrings := enumFunc()
+
 				stringsAdded.PushBackList(s.compare(oldStrings, newStrings))
 				stringsRemoved.PushBackList(s.compare(newStrings, oldStrings))
+
 				oldStrings = newStrings
 
 			} else {
@@ -108,7 +110,7 @@ func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumerateFunc) {
 }
 
 // Compare two maps and return a list of any changes.
-func (s *StrEnum) compare(a, b StringMap) *list.List {
+func (s *StrEnum) compare(a, b StrMap) *list.List {
 
 	// Create an empty list for new items.
 	l := list.New()
