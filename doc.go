@@ -1,7 +1,7 @@
 // All interaction with the library takes place through an instance of Service,
 // which is created in the following manner:
 //
-//     s := New(ServiceConfig{
+//     s := sdiscovery.New(ServiceConfig{
 //         PollInterval: 1*time.Minute,
 //         PingInterval: 2*time.Second,
 //         PeerTimeout:  8*time.Second,
