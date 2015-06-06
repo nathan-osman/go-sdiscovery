@@ -1,4 +1,4 @@
-package conn
+package comm
 
 import (
 	"encoding/json"

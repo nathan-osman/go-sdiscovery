@@ -30,6 +30,19 @@
 //     data, _ := s.PeerUserData(id)
 //     fmt.Printf("UserData: %s\n", data)
 //
+// If you need to connect to the peer, it is possible to obtain a slice of IP
+// addresses for the peer. As packets are received from the peer, the IP
+// address and timestamp are recored. This allows the service to determine
+// the best IP address for contacting the peer.
+//
+//     addrs, _ := s.PeerAddrs(id)
+//     for _, a := range addrs {
+//         fmt.Printf("- %s", a)
+//     }
+//
+// Note that you may want to filter the addresses since the slice may contain
+// both IPv4 and IPv6 addresses.
+//
 // The service can be shutdown by invoking the Stop() method:
 //
 //     s.Stop()
