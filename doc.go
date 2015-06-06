@@ -1,9 +1,3 @@
-// To use go-sdiscovery in your project, include the following import:
-//
-//     import "github.com/nathan-osman/go-sdiscovery"
-//
-// Usage
-//
 // All interaction with the library takes place through an instance of Service,
 // which is created in the following manner:
 //
