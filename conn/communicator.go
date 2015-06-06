@@ -9,27 +9,42 @@ import (
 	"github.com/nathan-osman/go-sdiscovery/util"
 )
 
-// Network interface manager and packet monitor
-type communicator struct {
-	packetReceived chan *packet
-	sendChan       chan []byte
-	stopChan       chan struct{}
-	connections    map[string][]*connection
-	port           int
+// Manages connections on available network interfaces.
+type Communicator struct {
+	PacketChan  chan *Packet
+	sendChan    chan *Packet
+	connections map[string][]*connection
+	port        int
 }
 
-// Create a new communicator
-func newCommunicator(pollInterval time.Duration, port int) *communicator {
+// Return a list of interface names.
+func interfaceNames() (util.StrMap, error) {
+
+	// Retrieve the current list of interfaces
+	ifis, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of the interface names
+	newNames := make(util.StrMap)
+	for _, ifi := range ifis {
+		newNames[ifi.Name] = nil
+	}
+
+	return newNames, nil
+}
+
+// Create a new communicator.
+func NewCommunicator(pollInterval time.Duration, port int) *Communicator {
 
 	// Create the communicator, including the channel that will be used
-	// for receiving the individual packets and the mapping between
-	// interface names and the individual connections for them
-	c := &communicator{
-		packetReceived: make(chan *packet),
-		sendChan:       make(chan []byte),
-		stopChan:       make(chan struct{}),
-		connections:    make(map[string][]*connection),
-		port:           port,
+	// for receiving the individual packets.
+	c := &Communicator{
+		PacketChan:  make(chan *Packet),
+		sendChan:    make(chan *Packet),
+		connections: make(map[string][]*connection),
+		port:        port,
 	}
 
 	// Spawn a goroutine that manages connections
@@ -38,31 +53,16 @@ func newCommunicator(pollInterval time.Duration, port int) *communicator {
 	return c
 }
 
-// Add and remove connections as interfaces are added and removed
-func (c *communicator) run(pollInterval time.Duration) {
+// Add and remove connections as interfaces are added and removed.
+func (c *Communicator) run(pollInterval time.Duration) {
 
-	// Enumerate interface additions and removals
+	// Enumerate interface additions and removals.
 	ticker := time.NewTicker(pollInterval)
-	ifiEnum := util.NewStrEnum(ticker.C, func() (util.StrMap, error) {
-
-		// Retrieve the current list of interfaces
-		ifis, err := net.Interfaces()
-		if err != nil {
-			return nil, err
-		}
-
-		// Create a map of the interface names
-		newNames := make(util.StrMap)
-		for _, ifi := range ifis {
-			newNames[ifi.Name] = nil
-		}
-
-		return newNames, nil
-	})
+	ifiEnum := util.NewStrEnum(ticker.C, interfaceNames)
 	defer ticker.Stop()
 
-	// Create a WaitGroup for each of the sockets so that we can
-	// ensure all of them end before closing the packet channel
+	// Create a WaitGroup for each of the sockets so that we can ensure all of
+	// them end before closing the packet channel.
 	var waitGroup sync.WaitGroup
 
 loop:
@@ -72,17 +72,19 @@ loop:
 			c.addInterface(name, &waitGroup)
 		case name := <-ifiEnum.StringRemoved:
 			c.removeInterface(name)
-		case data := <-c.sendChan:
+		case data, ok := <-c.sendChan:
 
-			// Send on each of the connections
-			for _, connections := range c.connections {
-				for _, connection := range connections {
-					connection.send(data)
+			// If the receive was successful, send the packet on each of the
+			// connections. Otherwise, quit the loop.
+			if ok {
+				for _, connections := range c.connections {
+					for _, connection := range connections {
+						connection.send(data)
+					}
 				}
+			} else {
+				break loop
 			}
-
-		case <-c.stopChan:
-			break loop
 		}
 	}
 
@@ -93,11 +95,11 @@ loop:
 
 	// Wait for the connections to finish then close the channel
 	waitGroup.Wait()
-	close(c.packetReceived)
+	close(c.PacketChan)
 }
 
 // Add connections for the specified interface
-func (c *communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
+func (c *Communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 
 	// Assume that most interfaces will have at most two addresses
 	connections := make([]*connection, 0, 2)
@@ -110,13 +112,18 @@ func (c *communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 	}
 
 	// Add a connection for broadcast and multicast addresses if present
-	for _, multicast := range []bool{true, false} {
-		if ifi.Flags&net.FlagBroadcast != 0 {
-			if conn, err := newConnection(c.packetReceived, waitGroup, ifi, c.port, multicast); err != nil {
-				log.Println("[ERR]", err)
-			} else {
-				connections = append(connections, conn)
-			}
+	if ifi.Flags&net.FlagMulticast != 0 {
+		if conn, err := newConnection(c.PacketChan, waitGroup, ifi, c.port, multicast); err != nil {
+			log.Println("[ERR]", err)
+		} else {
+			connections = append(connections, conn)
+		}
+	}
+	if ifi.Flags&net.FlagBroadcast != 0 {
+		if conn, err := newConnection(c.PacketChan, waitGroup, ifi, c.port, broadcast); err != nil {
+			log.Println("[ERR]", err)
+		} else {
+			connections = append(connections, conn)
 		}
 	}
 
@@ -127,7 +134,7 @@ func (c *communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 }
 
 // Remove all connections for the specified interface
-func (c *communicator) removeInterface(name string) {
+func (c *Communicator) removeInterface(name string) {
 
 	// Check if the interface exists
 	if connections, ok := c.connections[name]; ok {
@@ -142,13 +149,12 @@ func (c *communicator) removeInterface(name string) {
 	}
 }
 
-// Send the specified data on each of the connections
-func (c *communicator) send(data []byte) {
-	c.sendChan <- data
+// Send the specified packet on each of the connections.
+func (c *Communicator) send(pkt *Packet) {
+	c.sendChan <- pkt
 }
 
-// Stop the goroutine by closing the channels
-func (c *communicator) stop() {
+// Stop the goroutine by closing the send channel.
+func (c *Communicator) stop() {
 	close(c.sendChan)
-	close(c.stopChan)
 }
