@@ -1,19 +1,10 @@
 package peer
 
 import (
-	"net"
 	"testing"
 	"time"
 
 	"github.com/nathan-osman/go-sdiscovery/comm"
-)
-
-var (
-	testIP1 = net.IPv4(192, 168, 1, 1)
-	testIP2 = net.IPv4(192, 168, 1, 2)
-
-	testTime1 = time.Now()
-	testTime2 = testTime1.Add(time.Second)
 )
 
 // Ensure that pings result in the addition of new peer addresses.
