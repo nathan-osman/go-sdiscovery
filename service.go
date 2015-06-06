@@ -25,7 +25,7 @@ type ServiceConfig struct {
 type Service struct {
 	PeerAdded   chan string // indicates that a new peer was found
 	PeerRemoved chan string // indicates that an existing peer has timed out
-	stop        chan struct{}
+	stop        chan interface{}
 	peers       map[string]*peer.Peer
 	config      ServiceConfig
 }
@@ -36,7 +36,7 @@ func NewService(config ServiceConfig) *Service {
 	s := &Service{
 		PeerAdded:   make(chan string),
 		PeerRemoved: make(chan string),
-		stop:        make(chan struct{}),
+		stop:        make(chan interface{}),
 		peers:       make(map[string]*peer.Peer),
 		config:      config,
 	}
@@ -49,35 +49,33 @@ func NewService(config ServiceConfig) *Service {
 	return s
 }
 
-// Process pings and expire peers
+// Process pings and expire peers.
 func (s *Service) run() {
 
-	// Create a communicator for sending and receiving packets
-	communicator := conn.newCommunicator(s.config.PollInterval, s.config.Port)
-	defer communicator.stop()
+	// Create a communicator for sending and receiving packets.
+	communicator := conn.NewCommunicator(s.config.PollInterval, s.config.Port)
+	defer communicator.Stop()
 
-	// Create a ticker for sending pings
+	// Create a ticker for sending pings.
 	pingTicker := time.NewTicker(s.config.PingInterval)
 	defer pingTicker.Stop()
 
-	// Create a ticker for timeout checks
+	// Create a ticker for timeout checks.
 	timeoutTicker := time.NewTicker(s.config.PeerTimeout)
 	defer timeoutTicker.Stop()
 
-	// TODO:
-	pkt := &packet{
+	pkt := &conn.Packet{
 		ID:       s.config.ID,
 		UserData: s.config.UserData,
 	}
-	dd, _ := pkt.toJSON()
 
 	for {
 
 		select {
-		case p := <-communicator.packetReceived:
+		case p := <-communicator.PacketChan:
 			s.processPacket(p)
 		case <-pingTicker.C:
-			communicator.send(dd)
+			communicator.Send(pkt)
 		case <-timeoutTicker.C:
 			s.processPeers()
 		case <-s.stop:
@@ -86,44 +84,44 @@ func (s *Service) run() {
 	}
 }
 
-// Process a packet received
-func (s *Service) processPacket(pkt *packet) {
+// Process a packet received.
+func (s *Service) processPacket(pkt *conn.Packet) {
 
-	// Only process packets that did not originate from here
+	// Only process packets that did not originate from here.
 	if pkt.ID != s.config.ID {
 
-		// If the peer does not exist, create a new one
+		// If the peer does not exist, create a new one.
 		_, exists := s.peers[pkt.ID]
 		if !exists {
-			s.peers[pkt.ID] = &peer{}
+			s.peers[pkt.ID] = &peer.Peer{}
 		}
 
-		// Update the peer
-		s.peers[pkt.ID].ping(pkt, time.Now())
+		// Update the peer.
+		s.peers[pkt.ID].Ping(pkt, time.Now())
 
-		// Write to the PeerAdded channel if the peer is new
+		// Write to the PeerAdded channel if the peer is new.
 		if !exists {
 			s.PeerAdded <- pkt.ID
 		}
 	}
 }
 
-// Check for peer timeouts
+// Check for peer timeouts.
 func (s *Service) processPeers() {
 
 	curTime := time.Now()
 
 	for id, peer := range s.peers {
-		if peer.isExpired(s.config.PeerTimeout, curTime) {
+		if peer.IsExpired(s.config.PeerTimeout, curTime) {
 
-			// Write to the PeerRemoved channel and delete it
+			// Write to the PeerRemoved channel and delete it.
 			s.PeerRemoved <- id
 			delete(s.peers, id)
 		}
 	}
 }
 
-// Stop the service
+// Stop the service.
 func (s *Service) Stop() {
 	close(s.stop)
 }

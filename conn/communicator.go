@@ -150,11 +150,11 @@ func (c *Communicator) removeInterface(name string) {
 }
 
 // Send the specified packet on each of the connections.
-func (c *Communicator) send(pkt *Packet) {
+func (c *Communicator) Send(pkt *Packet) {
 	c.sendChan <- pkt
 }
 
 // Stop the goroutine by closing the send channel.
-func (c *Communicator) stop() {
+func (c *Communicator) Stop() {
 	close(c.sendChan)
 }

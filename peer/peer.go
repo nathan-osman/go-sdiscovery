@@ -15,7 +15,7 @@ type Peer struct {
 }
 
 // Record a ping from the specified address.
-func (p *Peer) ping(pkt *conn.Packet, curTime time.Time) {
+func (p *Peer) Ping(pkt *conn.Packet, curTime time.Time) {
 
 	// Store userData.
 	p.userData = pkt.UserData
@@ -33,7 +33,7 @@ func (p *Peer) ping(pkt *conn.Packet, curTime time.Time) {
 }
 
 // Remove all expired addresses and sort those that remain.
-func (p *Peer) isExpired(timeout time.Duration, curTime time.Time) bool {
+func (p *Peer) IsExpired(timeout time.Duration, curTime time.Time) bool {
 
 	// Create an empty slice pointing to the old array and filter the
 	// addresses based on whether they have expired or not.
