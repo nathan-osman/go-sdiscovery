@@ -1,22 +1,30 @@
 package peer
 
 import (
+	"net"
 	"testing"
 	"time"
 
 	"github.com/nathan-osman/go-sdiscovery/comm"
 )
 
+var (
+	testIP1 = net.IPv4(192, 168, 1, 1)
+	testIP2 = net.IPv4(192, 168, 1, 2)
+
+	testTime1 = time.Now()
+	testTime2 = testTime1.Add(time.Second)
+)
+
 // Ensure that pings result in the addition of new peer addresses.
 func Test_Peer_Ping(t *testing.T) {
 
 	// Create an empty peer.
-	times := generateTimes()
 	p := &Peer{}
 
 	// Ping the peer twice.
 	for i := 0; i < 2; i++ {
-		p.Ping(&comm.Packet{}, times[0])
+		p.Ping(&comm.Packet{}, testTime1)
 	}
 
 	// There should be one address in the peer.
@@ -25,17 +33,41 @@ func Test_Peer_Ping(t *testing.T) {
 	}
 }
 
+// Ensure that Addrs() returns a properly sorted slice of addresses.
+func Test_Peer_Addrs(t *testing.T) {
+
+	// Create a peer with two addresses one second apart.
+	p := &Peer{
+		addrs: peerSlice{
+			newPeerAddr(testIP1, testTime1),
+			newPeerAddr(testIP2, testTime2),
+		},
+	}
+
+	// Obtain the list of addresses.
+	addrs := p.Addrs()
+
+	// Ensure that two items are present.
+	if len(addrs) != 2 {
+		t.Fatal("Expected exactly two addresses")
+	}
+
+	// Ensure that the order is correct
+	if !addrs[0].Equal(testIP1) || !addrs[1].Equal(testIP2) {
+		t.Fatal("Addresses sorted incorrectly")
+	}
+}
+
 // Ensure that the peer expires when the addresses expire.
 func Test_Peer_IsExpired(t *testing.T) {
 
 	// Create a peer with an expired address.
-	times := generateTimes(2 * time.Second)
 	p := &Peer{
-		addrs: []*peerAddr{newPeerAddr(nil, times[0])},
+		addrs: peerSlice{newPeerAddr(testIP1, testTime1)},
 	}
 
 	// The peer should have now expired.
-	if !p.IsExpired(time.Second, times[1]) {
+	if !p.IsExpired(500*time.Millisecond, testTime2) {
 		t.Fatal("Peer should be expired")
 	}
 }
