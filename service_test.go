@@ -13,7 +13,6 @@ func Test_Service(t *testing.T) {
 		PeerTimeout:  time.Second,
 		Port:         8000,
 		ID:           "1234",
-		UserData:     nil,
 	})
 	defer s.Stop()
 }

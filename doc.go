@@ -32,5 +32,5 @@
 // The service can be shutdown by invoking the Stop() method:
 //
 //     s.Stop()
-
+//
 package sdiscovery

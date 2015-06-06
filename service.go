@@ -12,7 +12,7 @@ type peerMap map[string]*peer.Peer
 // ServiceConfig contains the parameters that control how the service behaves.
 // Note that it is important to keep the size of UserData to a minimum since
 // the entire struct is sent in each packet. Any modifications to this struct
-// after passing it to NewService() will be ignored.
+// after passing it to New() will be ignored.
 type ServiceConfig struct {
 	PollInterval time.Duration // time between polling for network interfaces
 	PingInterval time.Duration // time between pings on the network
@@ -32,7 +32,7 @@ type Service struct {
 	config      ServiceConfig
 }
 
-// New creates a new Service instance with the specified configuration.
+// Create a new Service instance with the specified configuration.
 func New(config ServiceConfig) *Service {
 
 	s := &Service{
