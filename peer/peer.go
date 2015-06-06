@@ -10,18 +10,18 @@ import (
 // the struct may be used from multiple goroutines, all access to members must
 // be done through accessors that lock a mutex.
 type Peer struct {
-	userData []byte
-	addrs    []*peerAddr
+	UserData []byte
+	Addrs    []*peerAddr
 }
 
 // Record a ping from the specified address.
 func (p *Peer) Ping(pkt *conn.Packet, curTime time.Time) {
 
 	// Store userData.
-	p.userData = pkt.UserData
+	p.UserData = pkt.UserData
 
 	// Attempt to find a matching address.
-	for _, addr := range p.addrs {
+	for _, addr := range p.Addrs {
 		if pkt.IP.Equal(addr.ip) {
 			addr.ping(curTime)
 			return
@@ -29,7 +29,7 @@ func (p *Peer) Ping(pkt *conn.Packet, curTime time.Time) {
 	}
 
 	// No matching address was found, add a new one.
-	p.addrs = append(p.addrs, newPeerAddr(pkt.IP, curTime))
+	p.Addrs = append(p.Addrs, newPeerAddr(pkt.IP, curTime))
 }
 
 // Remove all expired addresses and sort those that remain.
@@ -37,14 +37,14 @@ func (p *Peer) IsExpired(timeout time.Duration, curTime time.Time) bool {
 
 	// Create an empty slice pointing to the old array and filter the
 	// addresses based on whether they have expired or not.
-	addrs := p.addrs[:0]
-	for _, addr := range p.addrs {
+	addrs := p.Addrs[:0]
+	for _, addr := range p.Addrs {
 		if !addr.isExpired(timeout, curTime) {
 			addrs = append(addrs, addr)
 		}
 	}
-	p.addrs = addrs
+	p.Addrs = addrs
 
 	// Return true if no addresses remain.
-	return len(p.addrs) == 0
+	return len(p.Addrs) == 0
 }

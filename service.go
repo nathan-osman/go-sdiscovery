@@ -1,6 +1,8 @@
 package sdiscovery
 
 import (
+	"errors"
+	"sync"
 	"time"
 
 	"github.com/nathan-osman/go-sdiscovery/conn"
@@ -25,6 +27,7 @@ type ServiceConfig struct {
 // Service sends and receives packets on local network interfaces in order to
 // discover other peers providing the service and announce its presence.
 type Service struct {
+	sync.Mutex
 	PeerAdded   chan string // indicates that a new peer was found
 	PeerRemoved chan string // indicates that an existing peer has timed out
 	stopChan    chan interface{}
@@ -88,6 +91,10 @@ func (s *Service) run() {
 // Process a packet received from one of the connections.
 func (s *Service) processPacket(pkt *conn.Packet) {
 
+	// Obtain exclusive access to the map.
+	s.Lock()
+	defer s.Unlock()
+
 	// Check the ID on the packet to ensure it does not match this peer.
 	if pkt.ID != s.config.ID {
 
@@ -111,6 +118,10 @@ func (s *Service) processPacket(pkt *conn.Packet) {
 // Check each of the peers in order to determine if any expired.
 func (s *Service) processPeers() {
 
+	// Obtain exclusive access to the map.
+	s.Lock()
+	defer s.Unlock()
+
 	// Avoid repeated calls to time.Now() by invoking it once here.
 	curTime := time.Now()
 
@@ -122,6 +133,22 @@ func (s *Service) processPeers() {
 			delete(s.peers, id)
 		}
 	}
+}
+
+// Obtain the custom user data provided by the specified peer.
+func (s *Service) PeerUserData(id string) ([]byte, error) {
+
+	// Obtain exclusive access to the map.
+	s.Lock()
+	defer s.Unlock()
+
+	// Attempt to retrieve the peer from the map.
+	p, exists := s.peers[id]
+	if !exists {
+		return nil, errors.New("Peer does not exist")
+	}
+
+	return p.UserData, nil
 }
 
 // Stop the service. No more packets will be sent or received and all

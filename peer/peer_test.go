@@ -20,7 +20,7 @@ func Test_Peer_Ping(t *testing.T) {
 	}
 
 	// There should be one address in the peer.
-	if len(p.addrs) != 1 {
+	if len(p.Addrs) != 1 {
 		t.Fatal("Expected exactly one address")
 	}
 }
@@ -31,7 +31,7 @@ func Test_Peer_IsExpired(t *testing.T) {
 	// Create a peer with an expired address.
 	times := generateTimes(2 * time.Second)
 	p := &Peer{
-		addrs: []*peerAddr{newPeerAddr(nil, times[0])},
+		Addrs: []*peerAddr{newPeerAddr(nil, times[0])},
 	}
 
 	// The peer should have now expired.

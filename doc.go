@@ -7,6 +7,7 @@
 //         PeerTimeout:  8*time.Second,
 //         Port:         1234,
 //         ID:           "machine01",
+//         UserData:     []byte("data"),
 //     })
 //
 // At this point, the service will begin sending broadcast and multicast
@@ -22,6 +23,12 @@
 //             fmt.Printf("Peer %s removed!\n", id)
 //         }
 //     }
+//
+// Once you have a peer ID, you can use it to retrieve the custom user data for
+// that specific peer:
+//
+//     data, _ := s.PeerUserData(id)
+//     fmt.Printf("UserData: %s\n", data)
 //
 // The service can be shutdown by invoking the Stop() method:
 //
