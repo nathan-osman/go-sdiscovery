@@ -20,13 +20,13 @@ type Communicator struct {
 // Return a list of interface names.
 func interfaceNames() (util.StrMap, error) {
 
-	// Retrieve the current list of interfaces
+	// Retrieve the current list of interfaces.
 	ifis, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a map of the interface names
+	// Create a map of the interface names.
 	newNames := make(util.StrMap)
 	for _, ifi := range ifis {
 		newNames[ifi.Name] = nil
@@ -47,7 +47,7 @@ func NewCommunicator(pollInterval time.Duration, port int) *Communicator {
 		port:        port,
 	}
 
-	// Spawn a goroutine that manages connections
+	// Spawn a goroutine that manages connections.
 	go c.run(pollInterval)
 
 	return c
@@ -88,30 +88,30 @@ loop:
 		}
 	}
 
-	// Stop all of the connections
+	// Stop all of the connections.
 	for name, _ := range c.connections {
 		c.removeInterface(name)
 	}
 
-	// Wait for the connections to finish then close the channel
+	// Wait for the connections to finish then close the channel.
 	waitGroup.Wait()
 	close(c.PacketChan)
 }
 
-// Add connections for the specified interface
+// Add connections for the specified interface.
 func (c *Communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 
-	// Assume that most interfaces will have at most two addresses
+	// Assume that most interfaces will have at most two addresses.
 	connections := make([]*connection, 0, 2)
 
-	// Attempt to find the interface by name
+	// Attempt to find the interface by name.
 	ifi, err := net.InterfaceByName(name)
 	if err != nil {
 		log.Println("[ERR]", err)
 		return
 	}
 
-	// Add a connection for broadcast and multicast addresses if present
+	// Add a connection for broadcast and multicast addresses if present.
 	if ifi.Flags&net.FlagMulticast != 0 {
 		if conn, err := newConnection(c.PacketChan, waitGroup, ifi, c.port, multicast); err != nil {
 			log.Println("[ERR]", err)
@@ -127,24 +127,24 @@ func (c *Communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 		}
 	}
 
-	// Create a new entry in the map for the connections (if any)
+	// Create a new entry in the map for the connections (if any).
 	if len(connections) != 0 {
 		c.connections[name] = connections
 	}
 }
 
-// Remove all connections for the specified interface
+// Remove all connections for the specified interface.
 func (c *Communicator) removeInterface(name string) {
 
-	// Check if the interface exists
+	// Check if the interface exists.
 	if connections, ok := c.connections[name]; ok {
 
-		// Stop the connections
+		// Stop the connections.
 		for _, connection := range connections {
 			connection.stop()
 		}
 
-		// Remove the item from the map
+		// Remove the item from the map.
 		delete(c.connections, name)
 	}
 }

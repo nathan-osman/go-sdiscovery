@@ -2,6 +2,8 @@ package peer
 
 import (
 	"time"
+
+	"github.com/nathan-osman/go-sdiscovery/conn"
 )
 
 // Peer maintains information about a peer discovered on the network. Because
@@ -12,29 +14,29 @@ type Peer struct {
 	addrs    []*peerAddr
 }
 
-// Record a ping from the specified address
-func (p *Peer) ping(pkt *packet, curTime time.Time) {
+// Record a ping from the specified address.
+func (p *Peer) ping(pkt *conn.Packet, curTime time.Time) {
 
-	// Store userData
+	// Store userData.
 	p.userData = pkt.UserData
 
-	// Attempt to find a matching address
+	// Attempt to find a matching address.
 	for _, addr := range p.addrs {
-		if pkt.ip.Equal(addr.ip) {
+		if pkt.IP.Equal(addr.ip) {
 			addr.ping(curTime)
 			return
 		}
 	}
 
-	// No matching address was found, add a new one
-	p.addrs = append(p.addrs, newPeerAddr(pkt.ip, curTime))
+	// No matching address was found, add a new one.
+	p.addrs = append(p.addrs, newPeerAddr(pkt.IP, curTime))
 }
 
-// Remove all expired addresses and sort those that remain
+// Remove all expired addresses and sort those that remain.
 func (p *Peer) isExpired(timeout time.Duration, curTime time.Time) bool {
 
 	// Create an empty slice pointing to the old array and filter the
-	// addresses based on whether they have expired or not
+	// addresses based on whether they have expired or not.
 	addrs := p.addrs[:0]
 	for _, addr := range p.addrs {
 		if !addr.isExpired(timeout, curTime) {
@@ -43,6 +45,6 @@ func (p *Peer) isExpired(timeout time.Duration, curTime time.Time) bool {
 	}
 	p.addrs = addrs
 
-	// Return true if no addresses remain
+	// Return true if no addresses remain.
 	return len(p.addrs) == 0
 }

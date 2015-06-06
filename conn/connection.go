@@ -128,7 +128,7 @@ func (c *connection) send(pkt *Packet) error {
 	return err
 }
 
-// Stop listening for incoming packets
+// Stop listening for incoming packets.
 func (c *connection) stop() {
 	c.conn.Close()
 	close(c.stopChan)
