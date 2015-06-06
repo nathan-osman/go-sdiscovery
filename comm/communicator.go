@@ -9,11 +9,14 @@ import (
 	"github.com/nathan-osman/go-sdiscovery/util"
 )
 
+type connectionMap map[string][]*connection
+type connectionSlice []*connection
+
 // Manages connections on available network interfaces.
 type Communicator struct {
 	PacketChan  chan *Packet
 	sendChan    chan *Packet
-	connections map[string][]*connection
+	connections connectionMap
 	port        int
 }
 
@@ -43,7 +46,7 @@ func NewCommunicator(pollInterval time.Duration, port int) *Communicator {
 	c := &Communicator{
 		PacketChan:  make(chan *Packet),
 		sendChan:    make(chan *Packet),
-		connections: make(map[string][]*connection),
+		connections: make(connectionMap),
 		port:        port,
 	}
 
@@ -58,8 +61,9 @@ func (c *Communicator) run(pollInterval time.Duration) {
 
 	// Enumerate interface additions and removals.
 	ticker := time.NewTicker(pollInterval)
-	ifiEnum := util.NewStrEnum(ticker.C, interfaceNames)
 	defer ticker.Stop()
+
+	ifiEnum := util.NewStrEnum(ticker.C, interfaceNames)
 
 	// Create a WaitGroup for each of the sockets so that we can ensure all of
 	// them end before closing the packet channel.
@@ -78,8 +82,8 @@ loop:
 			// connections. Otherwise, quit the loop.
 			if ok {
 				for _, connections := range c.connections {
-					for _, connection := range connections {
-						connection.send(data)
+					for _, conn := range connections {
+						conn.send(data)
 					}
 				}
 			} else {
@@ -102,7 +106,7 @@ loop:
 func (c *Communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 
 	// Assume that most interfaces will have at most two addresses.
-	connections := make([]*connection, 0, 2)
+	connections := make(connectionSlice, 0, 2)
 
 	// Attempt to find the interface by name.
 	ifi, err := net.InterfaceByName(name)
@@ -114,14 +118,14 @@ func (c *Communicator) addInterface(name string, waitGroup *sync.WaitGroup) {
 	// Add a connection for broadcast and multicast addresses if present.
 	if ifi.Flags&net.FlagMulticast != 0 {
 		if conn, err := newConnection(c.PacketChan, waitGroup, ifi, c.port, multicast); err != nil {
-			log.Println("[ERR]", err)
+			log.Println("[WARN]", err)
 		} else {
 			connections = append(connections, conn)
 		}
 	}
 	if ifi.Flags&net.FlagBroadcast != 0 {
 		if conn, err := newConnection(c.PacketChan, waitGroup, ifi, c.port, broadcast); err != nil {
-			log.Println("[ERR]", err)
+			log.Println("[WARN]", err)
 		} else {
 			connections = append(connections, conn)
 		}
@@ -140,8 +144,8 @@ func (c *Communicator) removeInterface(name string) {
 	if connections, ok := c.connections[name]; ok {
 
 		// Stop the connections.
-		for _, connection := range connections {
-			connection.stop()
+		for _, conn := range connections {
+			conn.stop()
 		}
 
 		// Remove the item from the map.
