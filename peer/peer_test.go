@@ -7,8 +7,8 @@ import (
 	"github.com/nathan-osman/go-sdiscovery/conn"
 )
 
-// Test the ping() method.
-func Test_peer_ping(t *testing.T) {
+// Ensure that pings result in the addition of new peer addresses.
+func Test_Peer_Ping(t *testing.T) {
 
 	// Create an empty peer.
 	times := generateTimes()
@@ -16,7 +16,7 @@ func Test_peer_ping(t *testing.T) {
 
 	// Ping the peer twice.
 	for i := 0; i < 2; i++ {
-		p.ping(&conn.Packet{}, times[0])
+		p.Ping(&conn.Packet{}, times[0])
 	}
 
 	// There should be one address in the peer.
@@ -25,8 +25,8 @@ func Test_peer_ping(t *testing.T) {
 	}
 }
 
-// Test the isExpired() method.
-func Test_peer_isExpired(t *testing.T) {
+// Ensure that the peer expires when the addresses expire.
+func Test_Peer_IsExpired(t *testing.T) {
 
 	// Create a peer with an expired address.
 	times := generateTimes(2 * time.Second)
@@ -34,8 +34,8 @@ func Test_peer_isExpired(t *testing.T) {
 		addrs: []*peerAddr{newPeerAddr(nil, times[0])},
 	}
 
-	// The peer should have expired.
-	if !p.isExpired(time.Second, times[1]) {
+	// The peer should have now expired.
+	if !p.IsExpired(time.Second, times[1]) {
 		t.Fatal("Peer should be expired")
 	}
 }
