@@ -40,10 +40,18 @@ func NewStrEnum(enumChan <-chan time.Time, enumFunc EnumFunc) *StrEnum {
 // Continually invoke the enumerator until stopped.
 func (s *StrEnum) run(enumChan <-chan time.Time, enumFunc EnumFunc) {
 
-	// Map of strings from the previous enumeration and lists of items that
-	// need to be sent on one of the notification channels
-	oldStrings := StrMap{}
+	// Lists of items that need to be sent on one of the notification channels.
 	stringsAdded, stringsRemoved := list.New(), list.New()
+
+	// Load the initial values into the map.
+	oldStrings, err := enumFunc()
+	if err != nil {
+		log.Println("[ERR]", err)
+	} else {
+		for item, _ := range oldStrings {
+			stringsAdded.PushBack(item)
+		}
+	}
 
 	for {
 
