@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nathan-osman/go-sdiscovery/util"
+	"github.com/nathan-osman/go-sdiscovery/ifienum"
 )
 
 type connectionMap map[string][]*connection
@@ -18,24 +18,6 @@ type Communicator struct {
 	sendChan    chan *Packet
 	connections connectionMap
 	port        int
-}
-
-// Return a list of interface names.
-func interfaceNames() (util.StrMap, error) {
-
-	// Retrieve the current list of interfaces.
-	ifis, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a map of the interface names.
-	newNames := make(util.StrMap)
-	for _, ifi := range ifis {
-		newNames[ifi.Name] = nil
-	}
-
-	return newNames, nil
 }
 
 // Create a new communicator.
@@ -63,7 +45,7 @@ func (c *Communicator) run(pollInterval time.Duration) {
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
-	ifiEnum := util.NewStrEnum(ticker.C, interfaceNames)
+	enum := ifienum.New(ticker.C)
 
 	// Create a WaitGroup for each of the sockets so that we can ensure all of
 	// them end before closing the packet channel.
@@ -72,9 +54,9 @@ func (c *Communicator) run(pollInterval time.Duration) {
 loop:
 	for {
 		select {
-		case name := <-ifiEnum.StringAdded:
+		case name := <-enum.IfiAddedChan:
 			c.addInterface(name, &waitGroup)
-		case name := <-ifiEnum.StringRemoved:
+		case name := <-enum.IfiRemovedChan:
 			c.removeInterface(name)
 		case data, ok := <-c.sendChan:
 
